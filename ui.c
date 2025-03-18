@@ -1,5 +1,6 @@
 #define _AMD64_
 #include <debugapi.h>
+#include <stdio.h>
 #include "ui.h"
 
 UI_Vec2 ui_vec2(int x, int y)
@@ -76,15 +77,29 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
 
 void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh)
 {
-    UI_Rect rect = ui_rect(pos.x, pos.y, wh, wh);
-    if (rect_overlaps_vec2(rect, ctx->mouse_pos) && ctx->mouse_pressed)
+    UI_Container* cnt = &ctx->containers[ctx->container_idx];
     {
-        OutputDebugStringA("YES\n");
+        cnt->rect.x = pos.x;
+        cnt->rect.y = pos.y;
+        cnt->rect.w = wh;
+        cnt->rect.h = wh;
+        // We have 3 square (zindex is 2, 1, 0) in this demo. And the drawing order is 2, 1, 0. We will sort
+        // the drawing order later to achieve a descending order based on the z-index.
+        cnt->zindex = (2 - ctx->container_idx);
     }
-    ui_draw_rect(ctx, rect, color);
+    ctx->container_idx++;
+
+    if (rect_overlaps_vec2(cnt->rect, ctx->mouse_pos) && ctx->mouse_pressed)
+    {
+        char dbg_str[128];
+        sprintf(dbg_str, "mouse pressed and overlaps the rect whose zindex is %d\n", cnt->zindex);
+        OutputDebugStringA(dbg_str);
+    }
+    ui_draw_rect(ctx, cnt->rect, color);
 }
 
-void ui_begin(UI_Context *ctx)
+void ui_begin(UI_Context* ctx)
 {
   ctx->command_list.idx = 0;
+  ctx->container_idx = 0;
 }

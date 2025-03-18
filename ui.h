@@ -3,6 +3,8 @@
 #include <stdbool.h>
 
 #define UI_COMMANDLIST_SIZE (256 * 1024)
+#define UI_CONTAINERPOOL_SIZE 48
+
 #define ui_stack(T, n) struct { int idx; T items[n]; }
 #define expect(x)            \
     do                       \
@@ -35,9 +37,17 @@ typedef union {
     UI_RectCommand rect;
 } UI_Command;
 
+typedef struct {
+    UI_Rect rect;
+    int zindex;
+} UI_Container;
+
 typedef struct UI_Context UI_Context;
 struct UI_Context {
     ui_stack(char, UI_COMMANDLIST_SIZE) command_list;
+    // retained state pools
+    UI_Container containers[UI_CONTAINERPOOL_SIZE];
+    int container_idx;
     // input state
     UI_Vec2 mouse_pos;
     bool mouse_pressed;
@@ -50,4 +60,4 @@ UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);
 void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh);
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
-void ui_begin(UI_Context *ctx);
+void ui_begin(UI_Context* ctx);
