@@ -1,5 +1,11 @@
+#define _AMD64_
+#include <debugapi.h>
 #include "ui.h"
-#include "renderer.h"
+
+UI_Vec2 ui_vec2(int x, int y)
+{
+    return (UI_Vec2){ x, y };
+}
 
 UI_Rect ui_rect(int x, int y, int w, int h)
 {
@@ -46,6 +52,13 @@ int ui_next_command(UI_Context* ctx, UI_Command** cmd)
     }
 }
 
+///
+
+static bool rect_overlaps_vec2(UI_Rect r, UI_Vec2 p)
+{
+    return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+}
+
 //
 // UI functions
 //
@@ -61,13 +74,14 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
     }
 }
 
-void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color, unsigned border_width)
+void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh)
 {
-    unsigned bw = border_width;
-    ui_draw_rect(ctx, ui_rect(rect.x + bw, rect.y, rect.w - bw * 2, bw), color);
-    ui_draw_rect(ctx, ui_rect(rect.x + bw, rect.y + rect.h - bw, rect.w - bw * 2, bw), color);
-    ui_draw_rect(ctx, ui_rect(rect.x, rect.y, bw, rect.h), color);
-    ui_draw_rect(ctx, ui_rect(rect.x + rect.w - bw, rect.y, bw, rect.h), color);
+    UI_Rect rect = ui_rect(pos.x, pos.y, wh, wh);
+    if (rect_overlaps_vec2(rect, ctx->mouse_pos) && ctx->mouse_pressed)
+    {
+        OutputDebugStringA("YES\n");
+    }
+    ui_draw_rect(ctx, rect, color);
 }
 
 void ui_begin(UI_Context *ctx)

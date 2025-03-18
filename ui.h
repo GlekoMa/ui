@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdbool.h>
+
 #define UI_COMMANDLIST_SIZE (256 * 1024)
 #define ui_stack(T, n) struct { int idx; T items[n]; }
 #define expect(x)            \
@@ -20,6 +22,7 @@ enum {
 
 ///
 
+typedef struct { int x, y; } UI_Vec2;
 typedef struct { int x, y, w, h; } UI_Rect;
 typedef struct { unsigned char r, g, b, a; } UI_Color;
 
@@ -35,12 +38,16 @@ typedef union {
 typedef struct UI_Context UI_Context;
 struct UI_Context {
     ui_stack(char, UI_COMMANDLIST_SIZE) command_list;
+    // input state
+    UI_Vec2 mouse_pos;
+    bool mouse_pressed;
 };
 
 ///
 
+UI_Vec2 ui_vec2(int x, int y);
 UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);
-void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color, unsigned border_width);
+void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh);
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
 void ui_begin(UI_Context *ctx);

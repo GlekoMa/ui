@@ -11,6 +11,9 @@
 int g_client_width = 800;
 int g_client_height = 600;
 
+UI_Context* g_ctx;
+
+
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     switch (message)
@@ -18,6 +21,16 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_KEYDOWN:
             if (wparam == VK_ESCAPE)
                 DestroyWindow(window);
+            return 0;
+        case WM_MOUSEMOVE:
+            g_ctx->mouse_pos.x = LOWORD(lparam);
+            g_ctx->mouse_pos.y = HIWORD(lparam);
+            return 0;
+        case WM_LBUTTONDOWN:
+            g_ctx->mouse_pressed = true;
+            return 0;
+        case WM_LBUTTONUP:
+            g_ctx->mouse_pressed = false;
             return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
@@ -30,8 +43,9 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
-    ui_draw_box(ctx, ui_rect( 100, 100, 100, 100), ui_color(0, 255, 0, 255), 2);
-    ui_draw_box(ctx, ui_rect( 150, 150, 100, 100), ui_color(255, 0, 0, 255), 2);
+    ui_square(ctx, ui_vec2( 100, 100), ui_color(255, 0, 0, 255), 100);
+    ui_square(ctx, ui_vec2( 150, 100), ui_color(0, 255, 0, 255), 100);
+    ui_square(ctx, ui_vec2( 125, 150), ui_color(0, 0, 255, 255), 100);
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd)
@@ -65,8 +79,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
 
     // Init renderer & context
     r_init();
-    UI_Context* ctx = malloc(sizeof(UI_Context));
-    memset(ctx, 0, sizeof(*ctx));
+    g_ctx = malloc(sizeof(UI_Context));
+    memset(g_ctx, 0, sizeof(*g_ctx));
 
     // Show window
     ShowWindow(g_window, SW_SHOWDEFAULT);
@@ -86,12 +100,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         }
 
         // Process frame
-        process_frame(ctx);
+        process_frame(g_ctx);
 
         // Render
         r_clear(ui_color(24, 24, 24, 255));
         UI_Command* cmd = NULL;
-        while (ui_next_command(ctx, &cmd)) {
+        while (ui_next_command(g_ctx, &cmd)) {
             switch(cmd->type) {
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
             }
