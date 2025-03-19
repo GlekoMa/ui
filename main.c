@@ -46,6 +46,7 @@ static void process_frame(UI_Context* ctx)
     ui_square(ctx, ui_vec2( 100, 100), ui_color(255, 0, 0, 255), 100);
     ui_square(ctx, ui_vec2( 150, 100), ui_color(0, 255, 0, 255), 100);
     ui_square(ctx, ui_vec2( 125, 150), ui_color(0, 0, 255, 255), 100);
+    ui_end(ctx);
 }
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd)
