@@ -49,6 +49,10 @@ typedef struct {
 
 typedef struct UI_Context UI_Context;
 struct UI_Context {
+    // core state
+    int last_zindex;
+    UI_Container* next_hover_root;
+    // stack
     ui_stack(char, UI_COMMANDLIST_SIZE) command_list;
     ui_stack(UI_Container*, UI_ROOTLIST_SIZE) root_list;
     // retained state pools
