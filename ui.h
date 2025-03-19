@@ -67,7 +67,7 @@ struct UI_Context {
 UI_Vec2 ui_vec2(int x, int y);
 UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);
-void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh);
+void ui_square(UI_Context* ctx, UI_Vec2 pos, unsigned wh, UI_Color color);
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
 void ui_begin(UI_Context* ctx);
 void ui_end(UI_Context* ctx);

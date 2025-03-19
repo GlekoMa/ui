@@ -13,7 +13,6 @@ int g_client_height = 600;
 
 UI_Context* g_ctx;
 
-
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
     switch (message)
@@ -43,9 +42,9 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
-    ui_square(ctx, ui_vec2( 100, 100), ui_color(255, 0, 0, 255), 100);
-    ui_square(ctx, ui_vec2( 150, 100), ui_color(0, 255, 0, 255), 100);
-    ui_square(ctx, ui_vec2( 125, 150), ui_color(0, 0, 255, 255), 100);
+    ui_square(ctx, ui_vec2(100, 100), 100, ui_color(255, 0, 0, 255));
+    ui_square(ctx, ui_vec2(150, 100), 100, ui_color(0, 255, 0, 255));
+    ui_square(ctx, ui_vec2(125, 150), 100, ui_color(0, 0, 255, 255));
     ui_end(ctx);
 }
 
@@ -71,9 +70,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         WNDCLASSW wc     = {};
         wc.lpfnWndProc   = window_proc;
         wc.hInstance     = GetModuleHandleW(NULL);
-        wc.lpszClassName = L"1-intro_class";
+        wc.lpszClassName = L"3-z-order_class";
         RegisterClassW(&wc);
-        g_window = CreateWindowExW(0, wc.lpszClassName, L"1-intro", window_style,
+        g_window = CreateWindowExW(0, wc.lpszClassName, L"3-z-order", window_style,
                                  rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
                                  NULL, NULL, wc.hInstance, NULL);
     }

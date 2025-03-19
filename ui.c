@@ -120,7 +120,7 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
     }
 }
 
-void ui_square(UI_Context* ctx, UI_Vec2 pos, UI_Color color, unsigned wh)
+void ui_square(UI_Context* ctx, UI_Vec2 pos, unsigned wh, UI_Color color)
 {
     UI_Container* cnt = &ctx->containers[ctx->root_list.idx];
 
