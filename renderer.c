@@ -1,29 +1,34 @@
 #define COBJMACROS
-
 #include <d3d11.h>
 #include <dxgi1_3.h>
 #include <d3dcompiler.h>
 #include <dxgidebug.h>
 #include "renderer.h"
+#include "atlas.inl"
 
 #define BUFFER_SIZE 16384
 
 typedef struct Renderer_State
 {
-    ID3D11Device*           device;
-    ID3D11DeviceContext*    context;
-    IDXGISwapChain1*        swapchain;
-    ID3D11Buffer*           vbuffer_pos;
-    ID3D11Buffer*           vbuffer_color;
-    ID3D11Buffer*           ibuffer;
-    ID3D11Buffer*           cbuffer;
-    ID3D11InputLayout*      layout;
-    ID3D11VertexShader*     vshader;
-    ID3D11PixelShader*      pshader;
-    ID3D11RenderTargetView* rtview;
-    ID3D11Texture2D*        texture;
+    ID3D11Device*             device;
+    ID3D11DeviceContext*      context;
+    IDXGISwapChain1*          swapchain;
+    ID3D11SamplerState*       sampler_state;
+    ID3D11ShaderResourceView* texture_view;
+    ID3D11Buffer*             tbuffer;
+    ID3D11Buffer*             vbuffer_pos;
+    ID3D11Buffer*             vbuffer_color;
+    ID3D11Buffer*             ibuffer;
+    ID3D11Buffer*             cbuffer;
+	ID3D11BlendState*         blend_state;
+    ID3D11InputLayout*        layout;
+    ID3D11VertexShader*       vshader;
+    ID3D11PixelShader*        pshader;
+    ID3D11RenderTargetView*   rtview;
+    ID3D11Texture2D*          texture;
 } Renderer_State;
 
+static float         s_tex_data[BUFFER_SIZE *  8];
 static float         s_vert_pos_data[BUFFER_SIZE * 8];
 static unsigned char s_vert_col_data[BUFFER_SIZE * 16];
 static unsigned      s_index_data[BUFFER_SIZE * 6];
@@ -82,10 +87,17 @@ static void map_mvp_to_cbuffer(ID3D11DeviceContext* context, ID3D11Buffer* cbuff
     ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)cbuffer, 0);
 }
 
-static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* vbuffer_pos,
+static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* tbuffer, ID3D11Buffer* vbuffer_pos,
                              ID3D11Buffer* vbuffer_color, ID3D11Buffer* ibuffer, int client_width,
                              int client_height)
 {
+    // map: Update texture (atlas) buffer
+    D3D11_MAPPED_SUBRESOURCE mapped_tex;
+    ID3D11DeviceContext_Map(context, (ID3D11Resource*)tbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_tex);
+    memcpy(mapped_tex.pData, s_tex_data, sizeof(float) * 8 * (s_buf_idx));
+    ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)tbuffer, 0);
+
     // map: Update vertex (pos) buffer
     D3D11_MAPPED_SUBRESOURCE mapped_pos;
     ID3D11DeviceContext_Map(context, (ID3D11Resource*)vbuffer_pos, 0, D3D11_MAP_WRITE_DISCARD, 0,
@@ -111,33 +123,73 @@ static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* 
 // Renderer functions
 //
 
-static void push_rect(UI_Rect rect, UI_Color color)
+static void flush()
 {
-    if (s_buf_idx == BUFFER_SIZE)
-    {
-        r_present();
-    }
+    // Map vertex & index buffer
+    map_vertex_index_buffer(s_r_state.context, s_r_state.tbuffer, s_r_state.vbuffer_pos, s_r_state.vbuffer_color, s_r_state.ibuffer,
+                            g_client_width, g_client_height);
 
-    int vertex_pos_idx   = s_buf_idx * 8;
+    // Setup orthographic projection matrix into constant buffer
+    map_mvp_to_cbuffer(s_r_state.context, s_r_state.cbuffer, g_client_width, g_client_height);
+
+    // Set viewport
+    D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)g_client_width, (FLOAT)g_client_height, 0, 1 };
+
+    // IA-VS-RS-PS-OM, Draw, Present!
+    unsigned      strides[3]  = { sizeof(float) * 2, sizeof(float) * 2, sizeof(unsigned char) * 4 };
+    unsigned      offsets[3]  = { 0, 0, 0 };
+    ID3D11Buffer* vbuffers[3] = { s_r_state.tbuffer, s_r_state.vbuffer_pos, s_r_state.vbuffer_color };
+    ID3D11DeviceContext_IASetInputLayout(s_r_state.context, s_r_state.layout); // IA: Input Assembly
+    ID3D11DeviceContext_IASetPrimitiveTopology(s_r_state.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ID3D11DeviceContext_IASetVertexBuffers(s_r_state.context, 0, 3, vbuffers, strides, offsets);
+    ID3D11DeviceContext_IASetIndexBuffer(s_r_state.context, s_r_state.ibuffer, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11DeviceContext_VSSetConstantBuffers(s_r_state.context, 0, 1, &s_r_state.cbuffer);
+    ID3D11DeviceContext_VSSetShader(s_r_state.context, s_r_state.vshader, NULL, 0); // VS: Vertex Shader
+    ID3D11DeviceContext_RSSetViewports(s_r_state.context, 1, &viewport); // RS: Rasterizer Stage
+    ID3D11DeviceContext_PSSetShader(s_r_state.context, s_r_state.pshader, NULL, 0); // PS: Pixel Shader
+    ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &s_r_state.texture_view);
+    ID3D11DeviceContext_PSSetSamplers(s_r_state.context, 0, 1, &s_r_state.sampler_state);
+    ID3D11DeviceContext_OMSetRenderTargets(s_r_state.context, 1, &s_r_state.rtview, NULL); // OM: Output Merger
+	ID3D11DeviceContext_OMSetBlendState(s_r_state.context, s_r_state.blend_state, NULL, 0xffffffff);
+    ID3D11DeviceContext_DrawIndexed(s_r_state.context, s_buf_idx * 6, 0, 0);
+
+    // Reset buf_idx
+    s_buf_idx = 0;
+}
+
+static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color)
+{
+    if (s_buf_idx == BUFFER_SIZE) { flush(); }
+
+    int texvert_pos_idx  = s_buf_idx * 8;
     int vertex_color_idx = s_buf_idx * 16;
     int element_idx      = s_buf_idx * 4;
     int index_idx        = s_buf_idx * 6;
     s_buf_idx++;
 
-    // Update vertex (pos) buffer
-    float x = (float)rect.x;
-    float y = (float)rect.y;
-    float w = (float)rect.w;
-    float h = (float)rect.h;
+    // Update texture buffer
+    float x = src.x / (float)ATLAS_WIDTH;
+    float y = src.y / (float)ATLAS_HEIGHT;
+    float w = src.w / (float)ATLAS_WIDTH;
+    float h = src.h / (float)ATLAS_HEIGHT;
+    s_tex_data[texvert_pos_idx + 0] = x;
+    s_tex_data[texvert_pos_idx + 1] = y;
+    s_tex_data[texvert_pos_idx + 2] = x + w;
+    s_tex_data[texvert_pos_idx + 3] = y;
+    s_tex_data[texvert_pos_idx + 4] = x;
+    s_tex_data[texvert_pos_idx + 5] = y + h;
+    s_tex_data[texvert_pos_idx + 6] = x + w;
+    s_tex_data[texvert_pos_idx + 7] = y + h;
 
-    s_vert_pos_data[vertex_pos_idx + 0] = x;
-    s_vert_pos_data[vertex_pos_idx + 1] = y;
-    s_vert_pos_data[vertex_pos_idx + 2] = x + w;
-    s_vert_pos_data[vertex_pos_idx + 3] = y;
-    s_vert_pos_data[vertex_pos_idx + 4] = x;
-    s_vert_pos_data[vertex_pos_idx + 5] = y + h;
-    s_vert_pos_data[vertex_pos_idx + 6] = x + w;
-    s_vert_pos_data[vertex_pos_idx + 7] = y + h;
+    // Update vertex (pos) buffer
+    s_vert_pos_data[texvert_pos_idx + 0] = (float)dst.x;
+    s_vert_pos_data[texvert_pos_idx + 1] = (float)dst.y;
+    s_vert_pos_data[texvert_pos_idx + 2] = (float)dst.x + dst.w;
+    s_vert_pos_data[texvert_pos_idx + 3] = (float)dst.y;
+    s_vert_pos_data[texvert_pos_idx + 4] = (float)dst.x;
+    s_vert_pos_data[texvert_pos_idx + 5] = (float)dst.y + dst.h;
+    s_vert_pos_data[texvert_pos_idx + 6] = (float)dst.x + dst.w;
+    s_vert_pos_data[texvert_pos_idx + 7] = (float)dst.y + dst.h;
 
     // Update vertex (color) buffer
     memcpy(s_vert_col_data + vertex_color_idx + 0, &color, 4);
@@ -165,6 +217,53 @@ void r_init()
 
     // Create swap chain
     create_swapchain(g_window, s_r_state.device, &s_r_state.swapchain);
+
+    // Create sampler state
+    {
+        D3D11_SAMPLER_DESC desc = {
+            .Filter         = D3D11_FILTER_MIN_MAG_MIP_POINT,
+            .AddressU       = D3D11_TEXTURE_ADDRESS_WRAP,
+            .AddressV       = D3D11_TEXTURE_ADDRESS_WRAP,
+            .AddressW       = D3D11_TEXTURE_ADDRESS_WRAP,
+            .ComparisonFunc = D3D11_COMPARISON_NEVER,
+        };
+        ID3D11Device_CreateSamplerState(s_r_state.device, &desc, &s_r_state.sampler_state);
+    }
+
+    // Create texture buffer (atlas)
+    {
+        D3D11_TEXTURE2D_DESC desc = {
+            .Width     = ATLAS_WIDTH,
+            .Height    = ATLAS_HEIGHT,
+            .MipLevels = 1,
+            .ArraySize = 1,
+            .Format    = DXGI_FORMAT_R8_UNORM,
+            .SampleDesc.Count   = 1,
+            .Usage     = D3D11_USAGE_IMMUTABLE,
+            .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+        };
+        D3D11_SUBRESOURCE_DATA texture_subresource_data = {
+            .pSysMem = atlas_texture,
+            .SysMemPitch = ATLAS_WIDTH * 1,
+        };
+        ID3D11Texture2D* texture;
+        ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &texture_subresource_data, &texture);
+        ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, 0, &s_r_state.texture_view);
+        ID3D11Texture2D_Release(texture);
+    }
+
+    // Create vertex buffer (texture coordinates)
+    {
+        D3D11_BUFFER_DESC desc = {
+            .ByteWidth      = sizeof(s_tex_data),
+            .Usage          = D3D11_USAGE_DYNAMIC,
+            .BindFlags      = D3D11_BIND_VERTEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+        };
+
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_tex_data };
+        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.tbuffer);
+    }
 
     // Create vertex buffer (pos)
     {
@@ -216,36 +315,61 @@ void r_init()
         ID3D11Device_CreateBuffer(s_r_state.device, &desc, NULL, &s_r_state.cbuffer);
     }
 
+    // Create blend state
+    {
+        D3D11_BLEND_DESC desc = {
+            .RenderTarget[0] = {
+                .BlendEnable = TRUE,
+                .SrcBlend = D3D11_BLEND_SRC_ALPHA,
+                .DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
+                .BlendOp = D3D11_BLEND_OP_ADD,
+                .SrcBlendAlpha = D3D11_BLEND_ONE,
+                .DestBlendAlpha = D3D11_BLEND_ZERO,
+                .BlendOpAlpha = D3D11_BLEND_OP_ADD,
+                .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
+            }
+        };
+        ID3D11Device_CreateBlendState(s_r_state.device, &desc, &s_r_state.blend_state);
+    }
+
     // Create hlsl
-    const char hlsl[] = "cbuffer cbuffer0 : register(b0)                                        \n"
-                        "{                                                                      \n"
-                        "    float4x4 projection_matrix;                                        \n"
-                        "};                                                                     \n"
-                        "                                                                       \n"
-                        "struct VS_Input                                                        \n"
-                        "{                                                                      \n"
-                        "    float2 pos : POSITION;                                             \n"
-                        "    float4 color : COLOR;                                              \n"
-                        "};                                                                     \n"
-                        "                                                                       \n"
-                        "struct PS_INPUT                                                        \n"
-                        "{                                                                      \n"
-                        "    float4 pos : SV_POSITION;                                          \n"
-                        "    float4 color : COLOR;                                              \n"
-                        "};                                                                     \n"
-                        "                                                                       \n"
-                        "PS_INPUT vs(VS_Input input)                                            \n"
-                        "{                                                                      \n"
-                        "    PS_INPUT output;                                                   \n"
-                        "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f));\n"
-                        "    output.color = input.color;                                        \n"
-                        "    return output;                                                     \n"
-                        "}                                                                      \n"
-                        "                                                                       \n"
-                        "float4 ps(PS_INPUT input) : SV_TARGET                                  \n"
-                        "{                                                                      \n"
-                        "    return input.color;                                                \n"
-                        "}                                                                      \n";
+    const char hlsl[] = ""
+                        "Texture2D mytexture : register(t0);                                                     \n"
+                        "SamplerState mysampler : register(s0);                                                  \n"
+                        "                                                                                        \n"
+                        "cbuffer cbuffer0 : register(b0)                                                         \n"
+                        "{                                                                                       \n"
+                        "    float4x4 projection_matrix;                                                         \n"
+                        "};                                                                                      \n"
+                        "                                                                                        \n"
+                        "struct VS_Input                                                                         \n"
+                        "{                                                                                       \n"
+                        "    float2 tex : TEXTURE;                                                               \n"
+                        "    float2 pos : POSITION;                                                              \n"
+                        "    float4 color : COLOR;                                                               \n"
+                        "};                                                                                      \n"
+                        "                                                                                        \n"
+                        "struct PS_INPUT                                                                         \n"
+                        "{                                                                                       \n"
+                        "    float2 tex : TEXCOORD;                                                              \n"
+                        "    float4 pos : SV_POSITION;                                                           \n"
+                        "    float4 color : COLOR;                                                               \n"
+                        "};                                                                                      \n"
+                        "                                                                                        \n"
+                        "PS_INPUT vs(VS_Input input)                                                             \n"
+                        "{                                                                                       \n"
+                        "    PS_INPUT output;                                                                    \n"
+                        "    output.tex = input.tex;                                                             \n"
+                        "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f));                 \n"
+                        "    output.color = input.color;                                                         \n"
+                        "    return output;                                                                      \n"
+                        "}                                                                                       \n"
+                        "                                                                                        \n"
+                        "float4 ps(PS_INPUT input) : SV_TARGET                                                   \n"
+                        "{                                                                                       \n"
+                        "    return float4(mytexture.Sample(mysampler, input.tex).rrrr) * input.color;           \n"
+                        "}                                                                                       \n";
+
 
     // Create input layout, vertex shader, pixel shader
     {
@@ -253,16 +377,13 @@ void r_init()
         D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "vs", "vs_5_0", 0, 0, &vblob, NULL);
         ID3DBlob* pblob;
         D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", 0, 0, &pblob, NULL);
-
-        // clang-format off
         D3D11_INPUT_ELEMENT_DESC desc[] =
         {
             // SemanticName, Format,                     InputSlot,  AlignedByteOffset
-            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 1,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+            { "TEXTURE",  0, DXGI_FORMAT_R32G32_FLOAT,   0,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   1,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 2,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
         };
-        // clang-format on
-
         ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc),
                                        ID3D10Blob_GetBufferPointer(vblob), ID3D10Blob_GetBufferSize(vblob),
                                        &s_r_state.layout);
@@ -293,38 +414,15 @@ void r_clear(UI_Color color)
 
 void r_draw_rect(UI_Rect rect, UI_Color color)
 {
-    push_rect(rect, color);
+    push_rect(rect, atlas[ATLAS_WHITE], color);
 }
 
-static void flush()
+void r_draw_icon(int id, UI_Rect rect, UI_Color color) 
 {
-    // Map vertex & index buffer
-    map_vertex_index_buffer(s_r_state.context, s_r_state.vbuffer_pos, s_r_state.vbuffer_color, s_r_state.ibuffer,
-                            g_client_width, g_client_height);
-
-    // Setup orthographic projection matrix into constant buffer
-    map_mvp_to_cbuffer(s_r_state.context, s_r_state.cbuffer, g_client_width, g_client_height);
-
-    // Set viewport
-    D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)g_client_width, (FLOAT)g_client_height, 0, 1 };
-
-    // IA-VS-RS-PS-OM, Draw, Present!
-    unsigned      strides[2]  = { sizeof(float) * 2, sizeof(unsigned char) * 4 };
-    unsigned      offsets[2]  = { 0, 0 };
-    ID3D11Buffer* vbuffers[2] = { s_r_state.vbuffer_pos, s_r_state.vbuffer_color };
-    ID3D11DeviceContext_IASetInputLayout(s_r_state.context, s_r_state.layout); // IA: Input Assembly
-    ID3D11DeviceContext_IASetPrimitiveTopology(s_r_state.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_IASetVertexBuffers(s_r_state.context, 0, 2, vbuffers, strides, offsets);
-    ID3D11DeviceContext_IASetIndexBuffer(s_r_state.context, s_r_state.ibuffer, DXGI_FORMAT_R32_UINT, 0);
-    ID3D11DeviceContext_VSSetConstantBuffers(s_r_state.context, 0, 1, &s_r_state.cbuffer);
-    ID3D11DeviceContext_VSSetShader(s_r_state.context, s_r_state.vshader, NULL, 0); // VS: Vertex Shader
-    ID3D11DeviceContext_RSSetViewports(s_r_state.context, 1, &viewport); // RS: Rasterizer Stage
-    ID3D11DeviceContext_PSSetShader(s_r_state.context, s_r_state.pshader, NULL, 0); // PS: Pixel Shader
-    ID3D11DeviceContext_OMSetRenderTargets(s_r_state.context, 1, &s_r_state.rtview, NULL); // OM: Output Merger
-    ID3D11DeviceContext_DrawIndexed(s_r_state.context, s_buf_idx * 6, 0, 0);
-
-    // Reset buf_idx
-    s_buf_idx = 0;
+    UI_Rect src = atlas[id];
+    int x = rect.x + (rect.w - src.w) / 2;
+    int y = rect.y + (rect.h - src.h) / 2;
+    push_rect(ui_rect(x, y, src.w, src.h), src, color);
 }
 
 void r_present()
@@ -336,10 +434,14 @@ void r_present()
 void r_clean()
 {
     ID3D11RenderTargetView_Release(s_r_state.rtview);
+    ID3D11SamplerState_Release(s_r_state.sampler_state);
+    ID3D11ShaderResourceView_Release(s_r_state.texture_view);
+    ID3D11Buffer_Release(s_r_state.tbuffer);
     ID3D11Buffer_Release(s_r_state.vbuffer_pos);
     ID3D11Buffer_Release(s_r_state.vbuffer_color);
     ID3D11Buffer_Release(s_r_state.ibuffer);
     ID3D11Buffer_Release(s_r_state.cbuffer);
+    ID3D11BlendState_Release(s_r_state.blend_state);
     ID3D11InputLayout_Release(s_r_state.layout);
     ID3D11VertexShader_Release(s_r_state.vshader);
     ID3D11PixelShader_Release(s_r_state.pshader);
