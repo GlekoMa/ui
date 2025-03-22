@@ -10,6 +10,7 @@ int g_client_height;
 void r_init();
 void r_clear(UI_Color color);
 void r_draw_rect(UI_Rect rect, UI_Color color);
+void r_draw_text(const char* text, UI_Vec2 pos, UI_Color color);
 void r_draw_icon(int id, UI_Rect rect, UI_Color color);
 void r_present();
 void r_clean();

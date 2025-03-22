@@ -6,6 +6,8 @@
 #define UI_ROOTLIST_SIZE 32
 #define UI_CONTAINERPOOL_SIZE 48
 
+#define ui_min(a, b) ((a) < (b) ? (a) : (b))
+#define ui_max(a, b) ((a) > (b) ? (a) : (b))
 #define ui_stack(T, n) struct { int idx; T items[n]; }
 #define expect(x)            \
     do                       \

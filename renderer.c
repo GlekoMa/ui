@@ -379,6 +379,38 @@ void r_draw_icon(int id, UI_Rect rect, UI_Color color)
     push_rect(ui_rect(x, y, src.w, src.h), src, color);
 }
 
+void r_draw_text(const char* text, UI_Vec2 pos, UI_Color color) 
+{
+    UI_Rect dst = { pos.x, pos.y, 0, 0 };
+    for (const char* p = text; *p; p++)
+    {
+        if ((*p & 0xc0) == 0x80) { continue; }
+        int chr = ui_min((unsigned char)*p, 127);
+        UI_Rect src = atlas[ATLAS_FONT + chr];
+        dst.w = src.w;
+        dst.h = src.h;
+        push_rect(dst, src, color);
+        dst.x += dst.w;
+    }
+}
+
+int r_get_text_width(const char* text, int len)
+{
+    int res = 0;
+    for (const char* p = text; *p && len--; p++)
+    {
+        if ((*p & 0xc0) == 0x80) { continue; }
+        int chr = ui_min((unsigned char)*p, 127);
+        res += atlas[ATLAS_FONT + chr].w;
+    }
+    return res;
+}
+
+int r_get_text_height(void) 
+{
+    return 18;
+}
+
 void r_present()
 {
     flush();
