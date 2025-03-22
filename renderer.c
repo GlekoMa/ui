@@ -8,16 +8,13 @@
 
 #define BUFFER_SIZE 16384
 
-typedef struct Renderer_State
-{
+typedef struct {
     ID3D11Device*             device;
     ID3D11DeviceContext*      context;
     IDXGISwapChain1*          swapchain;
     ID3D11SamplerState*       sampler_state;
     ID3D11ShaderResourceView* texture_view;
-    ID3D11Buffer*             tbuffer;
-    ID3D11Buffer*             vbuffer_pos;
-    ID3D11Buffer*             vbuffer_color;
+    ID3D11Buffer*             vbuffer;
     ID3D11Buffer*             ibuffer;
     ID3D11Buffer*             cbuffer;
 	ID3D11BlendState*         blend_state;
@@ -28,10 +25,14 @@ typedef struct Renderer_State
     ID3D11Texture2D*          texture;
 } Renderer_State;
 
-static float         s_tex_data[BUFFER_SIZE *  8];
-static float         s_vert_pos_data[BUFFER_SIZE * 8];
-static unsigned char s_vert_col_data[BUFFER_SIZE * 16];
-static unsigned      s_index_data[BUFFER_SIZE * 6];
+typedef struct {
+    float pos[2];
+    float uv[2];
+    unsigned char col[4];
+} Vertex;
+
+static Vertex s_vert_data[BUFFER_SIZE * 4];
+static unsigned s_index_data[BUFFER_SIZE * 6];
 static int s_buf_idx = 0;
 static Renderer_State s_r_state;
 
@@ -87,30 +88,15 @@ static void map_mvp_to_cbuffer(ID3D11DeviceContext* context, ID3D11Buffer* cbuff
     ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)cbuffer, 0);
 }
 
-static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* tbuffer, ID3D11Buffer* vbuffer_pos,
-                             ID3D11Buffer* vbuffer_color, ID3D11Buffer* ibuffer, int client_width,
-                             int client_height)
+static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* vbuffer, ID3D11Buffer* ibuffer, 
+                                    int client_width, int client_height)
 {
-    // map: Update texture (atlas) buffer
-    D3D11_MAPPED_SUBRESOURCE mapped_tex;
-    ID3D11DeviceContext_Map(context, (ID3D11Resource*)tbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
-                            &mapped_tex);
-    memcpy(mapped_tex.pData, s_tex_data, sizeof(float) * 8 * (s_buf_idx));
-    ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)tbuffer, 0);
-
-    // map: Update vertex (pos) buffer
-    D3D11_MAPPED_SUBRESOURCE mapped_pos;
-    ID3D11DeviceContext_Map(context, (ID3D11Resource*)vbuffer_pos, 0, D3D11_MAP_WRITE_DISCARD, 0,
-                            &mapped_pos);
-    memcpy(mapped_pos.pData, s_vert_pos_data, sizeof(float) * 8 * (s_buf_idx));
-    ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)vbuffer_pos, 0);
-
-    // map: Update vertex (color) buffer
-    D3D11_MAPPED_SUBRESOURCE mapped_color;
-    ID3D11DeviceContext_Map(context, (ID3D11Resource*)vbuffer_color, 0, D3D11_MAP_WRITE_DISCARD, 0,
-                            &mapped_color);
-    memcpy(mapped_color.pData, s_vert_col_data, sizeof(unsigned char) * 16 * (s_buf_idx));
-    ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)vbuffer_color, 0);
+    // map: Update vertex buffer
+    D3D11_MAPPED_SUBRESOURCE mapped_vert;
+    ID3D11DeviceContext_Map(context, (ID3D11Resource*)vbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
+                            &mapped_vert);
+    memcpy(mapped_vert.pData, s_vert_data, sizeof(Vertex) * 4 * (s_buf_idx));
+    ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)vbuffer, 0);
 
     // map: Update index buffer
     D3D11_MAPPED_SUBRESOURCE mapped_index;
@@ -126,8 +112,7 @@ static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* 
 static void flush()
 {
     // Map vertex & index buffer
-    map_vertex_index_buffer(s_r_state.context, s_r_state.tbuffer, s_r_state.vbuffer_pos, s_r_state.vbuffer_color, s_r_state.ibuffer,
-                            g_client_width, g_client_height);
+    map_vertex_index_buffer(s_r_state.context, s_r_state.vbuffer, s_r_state.ibuffer, g_client_width, g_client_height);
 
     // Setup orthographic projection matrix into constant buffer
     map_mvp_to_cbuffer(s_r_state.context, s_r_state.cbuffer, g_client_width, g_client_height);
@@ -136,12 +121,11 @@ static void flush()
     D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)g_client_width, (FLOAT)g_client_height, 0, 1 };
 
     // IA-VS-RS-PS-OM, Draw, Present!
-    unsigned      strides[3]  = { sizeof(float) * 2, sizeof(float) * 2, sizeof(unsigned char) * 4 };
-    unsigned      offsets[3]  = { 0, 0, 0 };
-    ID3D11Buffer* vbuffers[3] = { s_r_state.tbuffer, s_r_state.vbuffer_pos, s_r_state.vbuffer_color };
+    unsigned stride = sizeof(Vertex);
+    unsigned offset = 0;
     ID3D11DeviceContext_IASetInputLayout(s_r_state.context, s_r_state.layout); // IA: Input Assembly
     ID3D11DeviceContext_IASetPrimitiveTopology(s_r_state.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_IASetVertexBuffers(s_r_state.context, 0, 3, vbuffers, strides, offsets);
+    ID3D11DeviceContext_IASetVertexBuffers(s_r_state.context, 0, 1, &s_r_state.vbuffer, &stride, &offset);
     ID3D11DeviceContext_IASetIndexBuffer(s_r_state.context, s_r_state.ibuffer, DXGI_FORMAT_R32_UINT, 0);
     ID3D11DeviceContext_VSSetConstantBuffers(s_r_state.context, 0, 1, &s_r_state.cbuffer);
     ID3D11DeviceContext_VSSetShader(s_r_state.context, s_r_state.vshader, NULL, 0); // VS: Vertex Shader
@@ -161,49 +145,47 @@ static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color)
 {
     if (s_buf_idx == BUFFER_SIZE) { flush(); }
 
-    int texvert_pos_idx  = s_buf_idx * 8;
-    int vertex_color_idx = s_buf_idx * 16;
-    int element_idx      = s_buf_idx * 4;
-    int index_idx        = s_buf_idx * 6;
+    int vert_idx  = s_buf_idx * 4;
+    int index_idx = s_buf_idx * 6;
     s_buf_idx++;
 
-    // Update texture buffer
+    // Update vbuffer (pos)
+    s_vert_data[vert_idx + 0].pos[0] = (float)dst.x;
+    s_vert_data[vert_idx + 0].pos[1] = (float)dst.y;
+    s_vert_data[vert_idx + 1].pos[0] = (float)dst.x + dst.w;
+    s_vert_data[vert_idx + 1].pos[1] = (float)dst.y;
+    s_vert_data[vert_idx + 2].pos[0] = (float)dst.x;
+    s_vert_data[vert_idx + 2].pos[1] = (float)dst.y + dst.h;
+    s_vert_data[vert_idx + 3].pos[0] = (float)dst.x + dst.w;
+    s_vert_data[vert_idx + 3].pos[1] = (float)dst.y + dst.h;
+
+    // Update vbuffer (uv)
     float x = src.x / (float)ATLAS_WIDTH;
     float y = src.y / (float)ATLAS_HEIGHT;
     float w = src.w / (float)ATLAS_WIDTH;
     float h = src.h / (float)ATLAS_HEIGHT;
-    s_tex_data[texvert_pos_idx + 0] = x;
-    s_tex_data[texvert_pos_idx + 1] = y;
-    s_tex_data[texvert_pos_idx + 2] = x + w;
-    s_tex_data[texvert_pos_idx + 3] = y;
-    s_tex_data[texvert_pos_idx + 4] = x;
-    s_tex_data[texvert_pos_idx + 5] = y + h;
-    s_tex_data[texvert_pos_idx + 6] = x + w;
-    s_tex_data[texvert_pos_idx + 7] = y + h;
+    s_vert_data[vert_idx + 0].uv[0] = x;
+    s_vert_data[vert_idx + 0].uv[1] = y;
+    s_vert_data[vert_idx + 1].uv[0] = x + w;
+    s_vert_data[vert_idx + 1].uv[1] = y;
+    s_vert_data[vert_idx + 2].uv[0] = x;
+    s_vert_data[vert_idx + 2].uv[1] = y + h;
+    s_vert_data[vert_idx + 3].uv[0] = x + w;
+    s_vert_data[vert_idx + 3].uv[1] = y + h;
 
-    // Update vertex (pos) buffer
-    s_vert_pos_data[texvert_pos_idx + 0] = (float)dst.x;
-    s_vert_pos_data[texvert_pos_idx + 1] = (float)dst.y;
-    s_vert_pos_data[texvert_pos_idx + 2] = (float)dst.x + dst.w;
-    s_vert_pos_data[texvert_pos_idx + 3] = (float)dst.y;
-    s_vert_pos_data[texvert_pos_idx + 4] = (float)dst.x;
-    s_vert_pos_data[texvert_pos_idx + 5] = (float)dst.y + dst.h;
-    s_vert_pos_data[texvert_pos_idx + 6] = (float)dst.x + dst.w;
-    s_vert_pos_data[texvert_pos_idx + 7] = (float)dst.y + dst.h;
-
-    // Update vertex (color) buffer
-    memcpy(s_vert_col_data + vertex_color_idx + 0, &color, 4);
-    memcpy(s_vert_col_data + vertex_color_idx + 4, &color, 4);
-    memcpy(s_vert_col_data + vertex_color_idx + 8, &color, 4);
-    memcpy(s_vert_col_data + vertex_color_idx + 12, &color, 4);
+    // Update vbuffer (col)
+    memcpy((char*)(s_vert_data + vert_idx + 0) + offsetof(Vertex, col), &color, 4);
+    memcpy((char*)(s_vert_data + vert_idx + 1) + offsetof(Vertex, col), &color, 4);
+    memcpy((char*)(s_vert_data + vert_idx + 2) + offsetof(Vertex, col), &color, 4);
+    memcpy((char*)(s_vert_data + vert_idx + 3) + offsetof(Vertex, col), &color, 4);
 
     // Update index buffer
-    s_index_data[index_idx + 0] = element_idx + 0;
-    s_index_data[index_idx + 1] = element_idx + 1;
-    s_index_data[index_idx + 2] = element_idx + 2;
-    s_index_data[index_idx + 3] = element_idx + 2;
-    s_index_data[index_idx + 4] = element_idx + 1;
-    s_index_data[index_idx + 5] = element_idx + 3;
+    s_index_data[index_idx + 0] = vert_idx + 0;
+    s_index_data[index_idx + 1] = vert_idx + 1;
+    s_index_data[index_idx + 2] = vert_idx + 2;
+    s_index_data[index_idx + 3] = vert_idx + 2;
+    s_index_data[index_idx + 4] = vert_idx + 1;
+    s_index_data[index_idx + 5] = vert_idx + 3;
 }
 
 void r_init()
@@ -252,43 +234,17 @@ void r_init()
         ID3D11Texture2D_Release(texture);
     }
 
-    // Create vertex buffer (texture coordinates)
+    // Create vertex buffer
     {
         D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(s_tex_data),
+            .ByteWidth      = sizeof(s_vert_data),
             .Usage          = D3D11_USAGE_DYNAMIC,
             .BindFlags      = D3D11_BIND_VERTEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
         };
 
-        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_tex_data };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.tbuffer);
-    }
-
-    // Create vertex buffer (pos)
-    {
-        D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(s_vert_pos_data),
-            .Usage          = D3D11_USAGE_DYNAMIC,
-            .BindFlags      = D3D11_BIND_VERTEX_BUFFER,
-            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        };
-
-        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_vert_pos_data };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.vbuffer_pos);
-    }
-
-    // Create vertex buffer (color)
-    {
-        D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(s_vert_col_data),
-            .Usage          = D3D11_USAGE_DYNAMIC,
-            .BindFlags      = D3D11_BIND_VERTEX_BUFFER,
-            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
-        };
-
-        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_vert_col_data };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.vbuffer_color);
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_vert_data };
+        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.vbuffer);
     }
 
     // Create index buffer
@@ -344,32 +300,31 @@ void r_init()
                         "                                                                                        \n"
                         "struct VS_Input                                                                         \n"
                         "{                                                                                       \n"
-                        "    float2 tex : TEXTURE;                                                               \n"
                         "    float2 pos : POSITION;                                                              \n"
-                        "    float4 color : COLOR;                                                               \n"
+                        "    float2 uv : UV;                                                                     \n"
+                        "    float4 col : COLOR;                                                                 \n"
                         "};                                                                                      \n"
                         "                                                                                        \n"
                         "struct PS_INPUT                                                                         \n"
                         "{                                                                                       \n"
-                        "    float2 tex : TEXCOORD;                                                              \n"
                         "    float4 pos : SV_POSITION;                                                           \n"
-                        "    float4 color : COLOR;                                                               \n"
+                        "    float2 uv : TEXCOORD;                                                               \n"
+                        "    float4 col : COLOR;                                                                 \n"
                         "};                                                                                      \n"
                         "                                                                                        \n"
                         "PS_INPUT vs(VS_Input input)                                                             \n"
                         "{                                                                                       \n"
                         "    PS_INPUT output;                                                                    \n"
-                        "    output.tex = input.tex;                                                             \n"
                         "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f));                 \n"
-                        "    output.color = input.color;                                                         \n"
+                        "    output.uv = input.uv;                                                               \n"
+                        "    output.col = input.col;                                                             \n"
                         "    return output;                                                                      \n"
                         "}                                                                                       \n"
                         "                                                                                        \n"
                         "float4 ps(PS_INPUT input) : SV_TARGET                                                   \n"
                         "{                                                                                       \n"
-                        "    return float4(mytexture.Sample(mysampler, input.tex).rrrr) * input.color;           \n"
+                        "    return float4(mytexture.Sample(mysampler, input.uv).rrrr) * input.col;              \n"
                         "}                                                                                       \n";
-
 
     // Create input layout, vertex shader, pixel shader
     {
@@ -379,10 +334,9 @@ void r_init()
         D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", 0, 0, &pblob, NULL);
         D3D11_INPUT_ELEMENT_DESC desc[] =
         {
-            // SemanticName, Format,                     InputSlot,  AlignedByteOffset
-            { "TEXTURE",  0, DXGI_FORMAT_R32G32_FLOAT,   0,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   1,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 2,          0, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "UV",       0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, uv),  D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(Vertex, col), D3D11_INPUT_PER_VERTEX_DATA, 0 }
         };
         ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc),
                                        ID3D10Blob_GetBufferPointer(vblob), ID3D10Blob_GetBufferSize(vblob),
@@ -436,9 +390,7 @@ void r_clean()
     ID3D11RenderTargetView_Release(s_r_state.rtview);
     ID3D11SamplerState_Release(s_r_state.sampler_state);
     ID3D11ShaderResourceView_Release(s_r_state.texture_view);
-    ID3D11Buffer_Release(s_r_state.tbuffer);
-    ID3D11Buffer_Release(s_r_state.vbuffer_pos);
-    ID3D11Buffer_Release(s_r_state.vbuffer_color);
+    ID3D11Buffer_Release(s_r_state.vbuffer);
     ID3D11Buffer_Release(s_r_state.ibuffer);
     ID3D11Buffer_Release(s_r_state.cbuffer);
     ID3D11BlendState_Release(s_r_state.blend_state);
