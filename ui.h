@@ -25,7 +25,6 @@ enum {
   UI_ICON_CHECK,
   UI_ICON_COLLAPSED,
   UI_ICON_EXPANDED,
-  UI_ICON_MAX
 };
 
 enum {

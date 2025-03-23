@@ -110,10 +110,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
             }
         }
-        r_draw_text("Hello jj", ui_vec2(100, 100), ui_color(000, 255, 000, 255));
+        r_draw_text("Hello jack", ui_vec2(0, 0), ui_color(000, 255, 000, 255));
+        r_draw_text_w(L"Do you know 不害臊的姑娘", ui_vec2(0, 20), ui_color(255, 255, 255, 255));
         r_draw_icon(1, ui_rect(100, 125, 100, 100), ui_color(000, 255, 000, 255));
-        r_draw_icon(2, ui_rect(125, 125, 100, 100), ui_color(000, 255, 000, 255));
-        r_draw_icon(3, ui_rect(150, 125, 100, 100), ui_color(000, 255, 000, 255));
+        r_draw_icon(2, ui_rect(120, 125, 100, 100), ui_color(000, 255, 000, 255));
+        r_draw_icon(3, ui_rect(140, 125, 100, 100), ui_color(000, 255, 000, 255));
+        r_draw_icon(4, ui_rect(160, 125, 100, 100), ui_color(000, 255, 000, 255));
         r_present();
     }
 
