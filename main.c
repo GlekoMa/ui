@@ -52,9 +52,6 @@ static void process_frame(UI_Context* ctx)
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd)
 {
-    // Set DPI awareness for better scaling on high DPI displays (Windows 10, v1607)
-    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
-
     // Create window
     {
         // Set the client position to screen center
