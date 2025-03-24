@@ -5,6 +5,8 @@
 #define UI_COMMANDLIST_SIZE (256 * 1024)
 #define UI_ROOTLIST_SIZE 32
 #define UI_CONTAINERPOOL_SIZE 48
+#define UI_CONTAINERSTACK_SIZE 32
+#define UI_IDSTACK_SIZE 32
 
 #define ui_min(a, b) ((a) < (b) ? (a) : (b))
 #define ui_max(a, b) ((a) > (b) ? (a) : (b))
@@ -19,6 +21,12 @@
     } while (0)
 
 ///
+
+enum {
+  UI_COLOR_BORDER,
+  UI_COLOR_WINDOWBG,
+  UI_COLOR_MAX
+};
 
 enum {
   UI_ICON_CLOSE = 1,
@@ -39,6 +47,9 @@ typedef struct { int x, y; } UI_Vec2;
 typedef struct { int x, y, w, h; } UI_Rect;
 typedef struct { unsigned char r, g, b, a; } UI_Color;
 
+typedef unsigned UI_Id;
+typedef struct { UI_Id id; int last_update; } UI_PoolItem;
+
 typedef struct { int type, size; } UI_BaseCommand;
 typedef struct { UI_BaseCommand base; void *dst; } UI_JumpCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
@@ -56,16 +67,28 @@ typedef struct {
     int zindex;
 } UI_Container;
 
+typedef struct {
+  UI_Color colors[UI_COLOR_MAX];
+} UI_Style;
+
 typedef struct UI_Context UI_Context;
 struct UI_Context {
+    // callback
+    void (*draw_frame)(UI_Context* ctx, UI_Rect rect, int colorid);
     // core state
+    UI_Style* style;
+    UI_Id last_id;
     int last_zindex;
+    int frame;
     UI_Container* next_hover_root;
     // stack
     ui_stack(char, UI_COMMANDLIST_SIZE) command_list;
     ui_stack(UI_Container*, UI_ROOTLIST_SIZE) root_list;
+    ui_stack(UI_Container*, UI_CONTAINERSTACK_SIZE) container_stack;
+    ui_stack(UI_Id, UI_IDSTACK_SIZE) id_stack;
     // retained state pools
     UI_Container containers[UI_CONTAINERPOOL_SIZE];
+    UI_PoolItem container_pool[UI_CONTAINERPOOL_SIZE];
     // input state
     UI_Vec2 mouse_pos;
     bool mouse_pressed;
@@ -76,7 +99,11 @@ struct UI_Context {
 UI_Vec2 ui_vec2(int x, int y);
 UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);
-void ui_square(UI_Context* ctx, UI_Vec2 pos, unsigned wh, UI_Color color);
+
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
+void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect);
+void ui_end_window(UI_Context* ctx);
+
+void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);
 void ui_end(UI_Context* ctx);

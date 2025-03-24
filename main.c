@@ -44,9 +44,10 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
-    ui_square(ctx, ui_vec2(100, 100), 100, ui_color(255, 0, 0, 255));
-    ui_square(ctx, ui_vec2(150, 100), 100, ui_color(0, 255, 0, 255));
-    ui_square(ctx, ui_vec2(125, 150), 100, ui_color(0, 0, 255, 255));
+    ui_begin_window(g_ctx, "window title", ui_rect(100, 100, 150, 200));
+    ui_end_window(g_ctx);
+    ui_begin_window(g_ctx, "window title 2", ui_rect(150, 150, 150, 200));
+    ui_end_window(g_ctx);
     ui_end(ctx);
 }
 
@@ -79,7 +80,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
     // Init renderer & context
     r_init();
     g_ctx = malloc(sizeof(UI_Context));
-    memset(g_ctx, 0, sizeof(*g_ctx));
+    ui_init(g_ctx);
 
     // Show window
     ShowWindow(g_window, SW_SHOWDEFAULT);
@@ -102,20 +103,19 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         process_frame(g_ctx);
 
         // Render
-        r_clear(ui_color(24, 24, 24, 255));
+        r_clear(ui_color(255, 255, 255, 255));
         UI_Command* cmd = NULL;
         while (ui_next_command(g_ctx, &cmd)) {
             switch(cmd->type) {
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
             }
         }
-        r_draw_text("Hello jack", ui_vec2(0, 0), ui_color(000, 255, 000, 255));
-        r_draw_text_w(L"Do you know 《不害臊的姑娘》", ui_vec2(0, 20), ui_color(255, 255, 255, 255));
 
-        r_draw_icon(1, ui_rect(100, 125, 100, 100), ui_color(000, 255, 000, 255));
-        r_draw_icon(2, ui_rect(120, 125, 100, 100), ui_color(000, 255, 000, 255));
-        r_draw_icon(3, ui_rect(140, 125, 100, 100), ui_color(000, 255, 000, 255));
-        r_draw_icon(4, ui_rect(160, 125, 100, 100), ui_color(000, 255, 000, 255));
+        // Test
+        r_draw_text("Hello jack", ui_vec2(0, 0), ui_color(000, 255, 000, 255));
+        r_draw_text_w(L"Do you know 《不害臊的姑娘》", ui_vec2(0, 20), ui_color(56, 58, 66, 255));
+        r_draw_icon(1, ui_rect(0, 40, 24, 24), ui_color(000, 255, 000, 255));
+
         r_present();
     }
 

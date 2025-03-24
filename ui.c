@@ -11,6 +11,19 @@
         (stk).items[(stk).idx] = (val);                                                                      \
         (stk).idx++;                                                                                         \
     } while (0)
+#define pop(stk)                                                                                             \
+    do                                                                                                       \
+    {                                                                                                        \
+        expect((stk).idx > 0);                                                                               \
+        (stk).idx--;                                                                                         \
+    } while (0)
+
+static UI_Style default_style = {
+  {
+    { 206, 206, 206, 255 }, // MU_COLOR_BORDER
+    { 250, 250, 250, 255 }, // MU_COLOR_WINDOWBG
+  }
+};
 
 UI_Vec2 ui_vec2(int x, int y)
 {
@@ -74,7 +87,118 @@ static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
     return cmd;
 }
 
-/// container
+//
+// id
+//
+
+// 32bit fnv-1a hash
+#define HASH_INITIAL 2166136261
+
+static void hash(UI_Id* hash, const void* data, int size)
+{
+    const unsigned char* p = data;
+    while (size--)
+    {
+        *hash = (*hash ^ *p++) * 16777619;
+    }
+}
+
+static UI_Id ui_get_id(UI_Context* ctx, const void* data, int size)
+{
+    int idx = ctx->id_stack.idx;
+    UI_Id res = (idx > 0) ? ctx->id_stack.items[idx - 1] : HASH_INITIAL;
+    hash(&res, data, size);
+    ctx->last_id = res;
+    return res;
+}
+
+void ui_pop_id(UI_Context* ctx)
+{
+    pop(ctx->id_stack);
+}
+
+//
+// pool
+//
+
+static void ui_pool_update(UI_Context* ctx, UI_PoolItem* items, int idx)
+{
+    items[idx].last_update = ctx->frame;
+}
+
+static int ui_pool_init(UI_Context* ctx, UI_PoolItem* items, int len, UI_Id id)
+{
+    // finds the oldest item in the pool (the one with the lowest `last_update` value)
+    int n = -1, f = ctx->frame;
+    for (int i = 0; i < len; i++)
+    {
+        if (items[i].last_update < f)
+        {
+            f = items[i].last_update;
+            n = i;
+        }
+    }
+
+    expect(n > -1);
+    items[n].id = id;
+    ui_pool_update(ctx, items, n);
+    return n;
+}
+
+static int ui_pool_get(UI_PoolItem* items, int len, UI_Id id)
+{
+    int i;
+    for (i = 0; i < len; i++)
+    {
+        if (items[i].id == id)
+        {
+            return i;
+        }
+    }
+    return -1;
+}
+
+//
+// container
+//
+
+static UI_Container* ui_get_current_container(UI_Context* ctx)
+{
+    expect(ctx->container_stack.idx > 0);
+    return ctx->container_stack.items[ctx->container_stack.idx - 1];
+}
+
+static void pop_container(UI_Context* ctx)
+{
+    pop(ctx->container_stack);
+    ui_pop_id(ctx);
+}
+
+static void ui_bring_to_front(UI_Context* ctx, UI_Container* cnt)
+{
+    cnt->zindex = ++ctx->last_zindex;
+}
+
+static UI_Container* get_container(UI_Context* ctx, UI_Id id)
+{
+    UI_Container* cnt;
+    // try to get existing container from pool
+    int idx = ui_pool_get(ctx->container_pool, UI_CONTAINERPOOL_SIZE, id);
+    if (idx >= 0)
+    {
+        ui_pool_update(ctx, ctx->container_pool, idx);
+        return &ctx->containers[idx];
+    }
+    else
+    {
+        // container not found in pool: init new container
+        idx = ui_pool_init(ctx, ctx->container_pool, UI_CONTAINERPOOL_SIZE, id);
+        cnt = &ctx->containers[idx];
+        memset(cnt, 0, sizeof(*cnt));
+        ui_bring_to_front(ctx, cnt);
+        return cnt;
+    }
+}
 
 static bool rect_overlaps_vec2(UI_Rect r, UI_Vec2 p)
 {
@@ -85,6 +209,7 @@ static void begin_root_container(UI_Context* ctx, UI_Container* cnt)
 {
     cnt->head = push_jump(ctx, NULL);
     push(ctx->root_list, cnt);
+    push(ctx->container_stack, cnt);
 
     // set as hover root if the mouse is overlapping this container and it has a
     // higher zindex than the current hover root
@@ -95,18 +220,37 @@ static void begin_root_container(UI_Context* ctx, UI_Container* cnt)
     }
 }
 
-static void end_root_container(UI_Context* ctx, UI_Container* cnt)
+static void end_root_container(UI_Context* ctx)
 {
+    UI_Container* cnt = ui_get_current_container(ctx);
     cnt->tail = push_jump(ctx, NULL);
-}
-
-static void ui_bring_to_front(UI_Context* ctx, UI_Container* cnt)
-{
-    cnt->zindex = ++ctx->last_zindex;
+    pop_container(ctx);
 }
 
 //
-// normal
+// window
+//
+
+void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect)
+{
+    UI_Id id  = ui_get_id(ctx, title, (int)strlen(title));
+    UI_Container* cnt = get_container(ctx, id);
+    push(ctx->id_stack, id);
+
+    if (cnt->rect.w == 0) { cnt->rect = rect; }
+    begin_root_container(ctx, cnt);
+
+    // draw frame
+    ctx->draw_frame(ctx, cnt->rect, UI_COLOR_WINDOWBG);
+}
+
+void ui_end_window(UI_Context* ctx)
+{
+    end_root_container(ctx);
+}
+
+//
+// draw
 //
 
 static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
@@ -120,23 +264,34 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
     }
 }
 
-void ui_square(UI_Context* ctx, UI_Vec2 pos, unsigned wh, UI_Color color)
+static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
 {
-    UI_Container* cnt = &ctx->containers[ctx->root_list.idx];
+    ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y, rect.w - 2, 1), color);
+    ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y + rect.h - 1, rect.w - 2, 1), color);
+    ui_draw_rect(ctx, ui_rect(rect.x, rect.y, 1, rect.h), color);
+    ui_draw_rect(ctx, ui_rect(rect.x + rect.w - 1, rect.y, 1, rect.h), color);
+}
 
-    // only init once, thus user could change zindex eternally by mouse pressing
-    if (!cnt->zindex)
-    {
-        ui_bring_to_front(ctx, cnt);
-        cnt->rect.x = pos.x;
-        cnt->rect.y = pos.y;
-        cnt->rect.w = wh;
-        cnt->rect.h = wh;
-    }
+static UI_Rect expand_rect(UI_Rect rect, int n)
+{
+    return ui_rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2);
+}
 
-    begin_root_container(ctx, cnt);
-    ui_draw_rect(ctx, cnt->rect, color);
-    end_root_container(ctx, cnt);
+static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
+{
+    ui_draw_rect(ctx, rect, ctx->style->colors[colorid]);
+    ui_draw_box(ctx, expand_rect(rect, 1), ctx->style->colors[UI_COLOR_BORDER]);
+}
+
+//
+// init
+//
+
+void ui_init(UI_Context* ctx)
+{
+    memset(ctx, 0, sizeof(*ctx));
+    ctx->draw_frame = draw_frame;
+    ctx->style = &default_style;
 }
 
 void ui_begin(UI_Context* ctx)
@@ -144,6 +299,7 @@ void ui_begin(UI_Context* ctx)
     ctx->command_list.idx = 0;
     ctx->root_list.idx = 0;
     ctx->next_hover_root  = NULL;
+    ctx->frame++;
 }
 
 static int compare_zindex(const void* a, const void* b)
@@ -153,6 +309,11 @@ static int compare_zindex(const void* a, const void* b)
 
 void ui_end(UI_Context* ctx)
 {
+    // check stacks
+    expect(ctx->container_stack.idx == 0);
+    expect(ctx->id_stack.idx        == 0);
+    
+    // bring hover root to front if mouse was pressed
     if (ctx->mouse_pressed && 
         ctx->next_hover_root &&
         ctx->next_hover_root->zindex < ctx->last_zindex)
