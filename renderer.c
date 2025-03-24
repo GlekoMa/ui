@@ -1,17 +1,17 @@
-// ------------------------------------------------------------
-// TODO: Speed up texture init by load saved atlas
-// ------------------------------------------------------------
 #include "ui.h"
 #pragma warning(disable: 4068)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "thirdparty/stb_truetype.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "thirdparty/stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "thirdparty/stb_image_write.h"
 #pragma clang diagnostic pop
 
 #define COBJMACROS
+#include <shlwapi.h>
 #include <d3d11.h>
 #include <dxgi1_3.h>
 #include <d3dcompiler.h>
@@ -67,7 +67,76 @@ enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 static Atlas s_atlas[NUM_CHARS];
 
 //
-// Renderer helper functions
+// Atlas save helper
+//
+
+void get_fixed_dir_from_appdata(const char* dir_name, char* fixed_dir)
+{
+    char appdata[MAX_PATH];
+    GetEnvironmentVariableA("APPDATA", appdata, sizeof(appdata));
+    strcpy(fixed_dir, appdata);
+    char fixed_dir_suffix[256] = { 0 };
+    wsprintfA(fixed_dir_suffix, "\\%s", dir_name);
+    strcat(fixed_dir, fixed_dir_suffix);
+}
+
+void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
+{
+    // For development: Recursively delete the target directory if it exists
+    if (PathFileExistsA(fixed_dir)) {
+        char del_path[MAX_PATH + 2]; // +2 for double null termination
+        strcpy(del_path, fixed_dir);
+        del_path[strlen(fixed_dir) + 1] = 0; // double null terminate
+        
+        SHFILEOPSTRUCTA file_op = {
+            NULL,
+            FO_DELETE,
+            del_path,
+            NULL,
+            FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT,
+            FALSE,
+            NULL,
+            NULL
+        };
+        SHFileOperationA(&file_op);
+    }
+
+    // Create the fixed dir
+    CreateDirectoryA(fixed_dir, NULL);
+
+    // Create atlas.png
+    char fixed_atlas_png_path[MAX_PATH];
+    sprintf(fixed_atlas_png_path, "%s\\atlas.png", fixed_dir);
+    stbi_write_png(fixed_atlas_png_path, ATLAS_WIDTH, ATLAS_HEIGHT, 1, temp_bitmap, ATLAS_WIDTH);
+
+    // Create atlas.dat
+    char fixed_atlas_dat_path[MAX_PATH];
+    sprintf(fixed_atlas_dat_path, "%s\\atlas.dat", fixed_dir);
+    FILE* fp = fopen(fixed_atlas_dat_path, "wb");
+    fwrite(s_atlas, sizeof(Atlas), NUM_CHARS, fp);
+    fclose(fp);
+}
+
+void load_atlas_cache(const char* fixed_dir, unsigned char* temp_bitmap) 
+{
+    // Load png
+    char fixed_atlas_png_path[MAX_PATH];
+    sprintf(fixed_atlas_png_path, "%s\\atlas.png", fixed_dir);
+    int width, height, channels;
+    unsigned char* bitmap = stbi_load(fixed_atlas_png_path, &width, &height, &channels, 1);
+    memcpy(temp_bitmap, bitmap, ATLAS_WIDTH * ATLAS_HEIGHT);
+    stbi_image_free(bitmap);
+    
+    // Load dat
+    char fixed_atlas_dat_path[MAX_PATH];
+    sprintf(fixed_atlas_dat_path, "%s\\atlas.dat", fixed_dir);
+    FILE* fp = fopen(fixed_atlas_dat_path, "rb");
+    fread(s_atlas, sizeof(Atlas), NUM_CHARS, fp);
+    fclose(fp);
+}
+
+//
+// Renderer helper
 //
 
 // Note: Argument `p_swapchain` must be double pointer. Because the swapchain is NULL before be
@@ -137,6 +206,15 @@ static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* 
 
 static void get_atlas(unsigned char* temp_bitmap)
 {
+    // If atlas cache exists, *early return*
+    char fixed_dir[MAX_PATH];
+    get_fixed_dir_from_appdata("ui", fixed_dir);
+    if (PathFileExistsA(fixed_dir))
+    {
+        load_atlas_cache(fixed_dir, temp_bitmap);
+        return;
+    }
+
     // Store 3500 regularly used characters and 22 punctuations for Simplified Chinese.
     // Sourced from https://zh.wiktionary.org/wiki/%E9%99%84%E5%BD%95:%E7%8E%B0%E4%BB%A3%E6%B1%89%E8%AF%AD%E5%B8%B8%E7%94%A8%E5%AD%97%E8%A1%A8
     // And https://zh.wikipedia.org/wiki/%E6%A0%87%E7%82%B9%E7%AC%A6%E5%8F%B7 for punctuation
@@ -317,11 +395,11 @@ static void get_atlas(unsigned char* temp_bitmap)
             s_atlas[0].xadvance = white_box_size;
         }
     }
-    stbi_write_png("atlas.png", ATLAS_WIDTH, ATLAS_HEIGHT, 1, temp_bitmap, ATLAS_WIDTH);
+    save_atlas_cache(fixed_dir, temp_bitmap);
 }
 
 //
-// Renderer functions
+// Renderer
 //
 
 static void flush()

@@ -1,4 +1,6 @@
 #pragma comment(lib, "user32")
+#pragma comment(lib, "shell32")
+#pragma comment(lib, "shlwapi")
 #pragma comment(lib, "d3d11")
 #pragma comment(lib, "dxguid")
 #pragma comment(lib, "dxgi")
