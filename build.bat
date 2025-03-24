@@ -60,7 +60,7 @@ if "%Compiler%"=="clang-cl" (
 )
 
 set DebugFlags=/Od /Zi
-set ReleaseFlags= /O2
+set ReleaseFlags= /O2 /DNDEBUG
 
 if %IsRelease%==1 (
     set CompilerFlags=%CommonCompilerFlags% %ReleaseFlags%

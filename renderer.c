@@ -486,10 +486,34 @@ void r_init()
 {
     // Create device and context
     // (Need to add BGRA support for compatibility with Direct2D)
-    UINT              flags    = D3D11_CREATE_DEVICE_DEBUG | D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+#ifndef NDEBUG
+        flags |= D3D11_CREATE_DEVICE_DEBUG;
+#endif
     D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0 };
     D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, flags, levels, ARRAYSIZE(levels),
                       D3D11_SDK_VERSION, &s_r_state.device, NULL, &s_r_state.context);
+
+#ifndef NDEBUG
+    // for debug builds enable VERY USEFUL debug break on API errors
+    {
+        ID3D11InfoQueue* info;
+        ID3D11Device_QueryInterface(s_r_state.device, &IID_ID3D11InfoQueue, (void**)&info);
+        ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+        ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
+        ID3D11InfoQueue_Release(info);
+    }
+
+    // enable debug break for DXGI too
+    {
+        IDXGIInfoQueue* dxgiInfo;
+        HRESULT hr = DXGIGetDebugInterface1(0, &IID_IDXGIInfoQueue, (void**)&dxgiInfo);
+        expect((SUCCEEDED(hr)));
+        IDXGIInfoQueue_SetBreakOnSeverity(dxgiInfo, DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+        IDXGIInfoQueue_SetBreakOnSeverity(dxgiInfo, DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, TRUE);
+        IDXGIInfoQueue_Release(dxgiInfo);
+    }
+#endif
 
     // Create swap chain
     create_swapchain(g_window, s_r_state.device, &s_r_state.swapchain);
@@ -625,10 +649,16 @@ void r_init()
 
     // Create input layout, vertex shader, pixel shader
     {
+        UINT flags = D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR | D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_WARNINGS_ARE_ERRORS;
+#ifndef NDEBUG
+        flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#else
+        flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
+#endif
         ID3DBlob* vblob;
-        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "vs", "vs_5_0", 0, 0, &vblob, NULL);
+        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "vs", "vs_5_0", flags, 0, &vblob, NULL);
         ID3DBlob* pblob;
-        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", 0, 0, &pblob, NULL);
+        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", flags, 0, &pblob, NULL);
         D3D11_INPUT_ELEMENT_DESC desc[] =
         {
             { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
