@@ -1,12 +1,14 @@
 #pragma comment(lib, "user32")
 #pragma comment(lib, "shell32")
 #pragma comment(lib, "shlwapi")
+#pragma comment(lib, "dwmapi")
 #pragma comment(lib, "d3d11")
 #pragma comment(lib, "dxguid")
 #pragma comment(lib, "dxgi")
 #pragma comment(lib, "d3dcompiler")
 
 #include <windows.h>
+#include <dwmapi.h>
 #include "ui.h"
 #include "renderer.h"
 
@@ -19,6 +21,20 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 {
     switch (message)
     {
+        case WM_NCCALCSIZE:
+            // remove the standard window frame
+            if (!wparam) 
+                return DefWindowProcW(window, message, wparam, lparam);
+            return 0;
+        case WM_CREATE:
+            // force app to send a WM_NCCALCSIZE message
+            SetWindowPos(window, NULL, 0, 0, 0, 0,
+                         SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOMOVE | SWP_NOZORDER);
+            return 0;
+        case WM_SETCURSOR:
+            // show an arrow instead of the busy cursor
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+            return 0;
         case WM_KEYDOWN:
             if (wparam == VK_ESCAPE)
                 DestroyWindow(window);
@@ -63,8 +79,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
 
         // Give the client area rectangle, get back the entire window rectangle
         RECT rect         = { x, y, x + g_client_width, y + g_client_height };
-        long window_style = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX;
-        AdjustWindowRectEx(&rect, WS_OVERLAPPEDWINDOW, 0, 0);
+        long window_style = 0;
+        AdjustWindowRectEx(&rect, 0, 0, 0);
 
         // Register window class then create window
         WNDCLASSW wc     = {};
@@ -75,6 +91,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         g_window = CreateWindowExW(0, wc.lpszClassName, L"3-z-order", window_style,
                                  rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
                                  NULL, NULL, wc.hInstance, NULL);
+        // Disable window animation (e.g. pop up)
+        BOOL attrib = TRUE;
+        DwmSetWindowAttribute(g_window, DWMWA_TRANSITIONS_FORCEDISABLED, &attrib, sizeof(attrib));
     }
 
     // Init renderer & context
