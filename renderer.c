@@ -161,6 +161,7 @@ static void create_swapchain(HWND window, ID3D11Device* device, IDXGISwapChain1*
         .SwapEffect  = DXGI_SWAP_EFFECT_FLIP_DISCARD,
     };
     IDXGIFactory2_CreateSwapChainForHwnd(factory, (IUnknown*)device, window, &desc, NULL, NULL, p_swapchain);
+    IDXGIFactory_MakeWindowAssociation(factory, window, DXGI_MWA_NO_ALT_ENTER);
     IDXGIFactory2_Release(factory);
 }
 
