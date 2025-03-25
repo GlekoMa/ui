@@ -67,6 +67,20 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
+static int text_width(const wchar_t* text, int len)
+{
+    if (len < 0)
+    {
+        len = (int)wcslen(text);
+    }
+    return r_get_text_width(text, len);
+}
+
+static int text_height()
+{
+    return r_get_text_height();
+}
+
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd)
 {
     // Create window
@@ -100,6 +114,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
     r_init();
     g_ctx = malloc(sizeof(UI_Context));
     ui_init(g_ctx);
+    g_ctx->text_width = text_width;
+    g_ctx->text_height = text_height;
 
     // Show window
     ShowWindow(g_window, SW_SHOWDEFAULT);
@@ -131,9 +147,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         }
 
         // Test
-        r_draw_text("Hello jack", ui_vec2(0, 0), ui_color(000, 255, 000, 255));
-        r_draw_text_w(L"Do you know 《不害臊的姑娘》", ui_vec2(0, 20), ui_color(56, 58, 66, 255));
-        r_draw_icon(1, ui_rect(0, 40, 24, 24), ui_color(000, 255, 000, 255));
+        wchar_t s[] = L"Do you know 不害臊的姑娘";
+        r_draw_rect(ui_rect(0, 0, g_ctx->text_width(s, -1), g_ctx->text_height()),
+                    ui_color(200, 200, 200, 255));
+        r_draw_text(s, ui_vec2(0, 0), ui_color(56, 58, 66, 255));
+        r_draw_icon(1, ui_rect(0, 40, 24, 24), ui_color(0, 255, 0, 255));
 
         r_present();
     }

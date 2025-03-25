@@ -1,4 +1,5 @@
 #include "ui.h"
+#include <stdlib.h>
 #pragma warning(disable: 4068)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -11,6 +12,7 @@
 #pragma clang diagnostic pop
 
 #define COBJMACROS
+#include <windows.h>
 #include <shlwapi.h>
 #include <d3d11.h>
 #include <dxgi1_3.h>
@@ -706,27 +708,6 @@ void r_draw_icon(int id, UI_Rect rect, UI_Color color)
     push_rect(ui_rect(x, y, src.w, src.h), src, color);
 }
 
-void r_draw_text(const char* text, UI_Vec2 pos, UI_Color color)
-{
-    UI_Rect dst = { pos.x, pos.y + (int)(24 * 0.8), 0, 0 };
-    for (const char* p = text; *p; p++)
-    {
-        // 32 is the first 32 char of ascii table (which we didn't get)
-        int chr = (unsigned char)*p - 32 + NUM_CHARS_SYMBOL + 1;
-        UI_Rect src = s_atlas[chr].src;
-        Atlas* b = &s_atlas[chr];
-
-        dst.x += (int)b->xoff;
-        dst.y += (int)b->yoff;
-        dst.w = src.w;
-        dst.h = src.h;
-        push_rect(dst, src, color);
-
-        dst.x += (int)(b->xadvance - b->xoff);
-        dst.y -= (int)b->yoff;
-    }
-}
-
 // TODO: need better performance
 static int find_atlas_idx_by_codepoint(int codepoint)
 {
@@ -746,12 +727,11 @@ static int find_atlas_idx_by_codepoint(int codepoint)
     return 63 - 32 + NUM_CHARS_SYMBOL + 1; // '?'
 }
 
-void r_draw_text_w(const wchar_t* text, UI_Vec2 pos, UI_Color color)
+void r_draw_text(const wchar_t* text, UI_Vec2 pos, UI_Color color)
 {
     UI_Rect dst = { pos.x, pos.y + (int)(24 * 0.8), 0, 0 };
     for (const wchar_t* p = text; *p; p++)
     {
-        // 32 is the first 32 char of ascii table (which we didn't get)
         int chr = find_atlas_idx_by_codepoint(*p);
         UI_Rect src = s_atlas[chr].src;
         Atlas* b = &s_atlas[chr];
@@ -767,21 +747,21 @@ void r_draw_text_w(const wchar_t* text, UI_Vec2 pos, UI_Color color)
     }
 }
 
-// int r_get_text_width(const char* text, int len)
-// {
-//     int res = 0;
-//     for (const char* p = text; *p && len--; p++)
-//     {
-//         int chr = ui_min((unsigned char)*p, 127);
-//         res += atlas[ATLAS_FONT + chr].w;
-//     }
-//     return res;
-// }
-//
-// int r_get_text_height(void)
-// {
-//     return 18;
-// }
+int r_get_text_width(const wchar_t* text, int len)
+{
+    int res = 0;
+    for (const wchar_t* p = text; *p && len--; p++)
+    {
+        int chr = find_atlas_idx_by_codepoint(*p);
+        res += s_atlas[chr].xadvance;
+    }
+    return res;
+}
+
+int r_get_text_height(void)
+{
+    return 24;
+}
 
 void r_present()
 {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <wchar.h>
 #include <stdbool.h>
 
 #define UI_COMMANDLIST_SIZE (256 * 1024)
@@ -23,16 +24,16 @@
 ///
 
 enum {
-  UI_COLOR_BORDER,
-  UI_COLOR_WINDOWBG,
-  UI_COLOR_MAX
+    UI_COLOR_BORDER,
+    UI_COLOR_WINDOWBG,
+    UI_COLOR_MAX
 };
 
 enum {
-  UI_ICON_CLOSE = 1,
-  UI_ICON_CHECK,
-  UI_ICON_COLLAPSED,
-  UI_ICON_EXPANDED,
+    UI_ICON_CLOSE = 1,
+    UI_ICON_CHECK,
+    UI_ICON_COLLAPSED,
+    UI_ICON_EXPANDED,
 };
 
 enum {
@@ -68,12 +69,14 @@ typedef struct {
 } UI_Container;
 
 typedef struct {
-  UI_Color colors[UI_COLOR_MAX];
+    UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 
 typedef struct UI_Context UI_Context;
 struct UI_Context {
     // callback
+    int (*text_width)(const wchar_t* str, int len);
+    int (*text_height)();
     void (*draw_frame)(UI_Context* ctx, UI_Rect rect, int colorid);
     // core state
     UI_Style* style;
