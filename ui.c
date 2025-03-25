@@ -1,3 +1,4 @@
+#include "renderer.h"
 #define _AMD64_
 #include <debugapi.h>
 #include <stdio.h>
@@ -11,6 +12,7 @@
         (stk).items[(stk).idx] = (val);                                                                      \
         (stk).idx++;                                                                                         \
     } while (0)
+
 #define pop(stk)                                                                                             \
     do                                                                                                       \
     {                                                                                                        \
@@ -19,8 +21,8 @@
     } while (0)
 
 static UI_Style default_style = {
-    // padding
-    5,
+    // size | padding | spacing
+    { 68, 10 }, 5, 4,
     {
         {  56,  58,  66, 255 }, // MU_COLOR_TEXT
         { 206, 206, 206, 255 }, // MU_COLOR_BORDER
@@ -41,6 +43,11 @@ UI_Rect ui_rect(int x, int y, int w, int h)
 UI_Color ui_color(int r, int g, int b, int a)
 {
     return (UI_Color){ r, g, b, a };
+}
+
+static UI_Rect expand_rect(UI_Rect rect, int n)
+{
+    return ui_rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2);
 }
 
 //
@@ -115,7 +122,7 @@ static UI_Id ui_get_id(UI_Context* ctx, const void* data, int size)
     return res;
 }
 
-void ui_pop_id(UI_Context* ctx)
+static void ui_pop_id(UI_Context* ctx)
 {
     pop(ctx->id_stack);
 }
@@ -159,6 +166,53 @@ static int ui_pool_get(UI_PoolItem* items, int len, UI_Id id)
         }
     }
     return -1;
+}
+
+// 
+// layout
+//
+
+void ui_layout_row(UI_Context* ctx, int items, int height)
+{
+    UI_Layout* layout = &ctx->layout;
+    expect(items <= UI_MAX_WIDTHS);
+
+    int cnt_width = ctx->container_stack.items[ctx->container_stack.idx-1]->rect.w;
+    int width = (int)(cnt_width / items);
+    for (int i = 0; i < items; i++)
+        layout->widths[i] = width;
+    layout->items      = items;
+    layout->position   = ui_vec2(0, layout->next_row);
+    layout->size.y     = height;
+    layout->item_index = 0;
+}
+
+static UI_Rect ui_layout_next(UI_Context* ctx)
+{
+    UI_Layout* layout = &ctx->layout;
+    UI_Rect    res;
+
+    // handle next row
+    if (layout->item_index == layout->items) {
+        ui_layout_row(ctx, layout->items, layout->size.y);
+    }
+
+    // get res
+    res.x = layout->position.x;
+    res.y = layout->position.y;
+    res.w = layout->widths[layout->item_index];
+    res.h = layout->size.y;
+
+    // update layout
+    layout->position.x += res.w + ctx->style->spacing;
+    layout->next_row = res.y + res.h + ctx->style->spacing;
+    layout->item_index++;
+
+    // apply body offset
+    res.x += layout->body.x;
+    res.y += layout->body.y;
+
+    return res;
 }
 
 //
@@ -245,6 +299,10 @@ void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect)
 
     // draw frame
     ctx->draw_frame(ctx, cnt->rect, UI_COLOR_WINDOWBG);
+
+    // set layout
+    memset(&ctx->layout, 0, sizeof(ctx->layout));
+    ctx->layout.body = expand_rect(cnt->rect, -ctx->style->padding);
 }
 
 void ui_end_window(UI_Context* ctx)
@@ -286,11 +344,6 @@ static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
     ui_draw_rect(ctx, ui_rect(rect.x + rect.w - 1, rect.y, 1, rect.h), color);
 }
 
-static UI_Rect expand_rect(UI_Rect rect, int n)
-{
-    return ui_rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2);
-}
-
 static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 {
     ui_draw_rect(ctx, rect, ctx->style->colors[colorid]);
@@ -301,13 +354,23 @@ static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 // control
 //
 
-void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
+static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
 {
     UI_Vec2 pos = {
         .x = rect.x + ctx->style->padding,
         .y = rect.y + (rect.h - ctx->text_height()) / 2,
     };
+    ui_draw_box(
+        ctx, 
+        ui_rect(pos.x, pos.y, r_get_text_width(str, (int)wcslen(str)), r_get_text_height()), 
+        ui_color(0, 0, 255, 255)
+    );
     ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
+}
+
+void ui_label(UI_Context* ctx, const wchar_t* text)
+{
+    ui_draw_control_text(ctx, text, ui_layout_next(ctx), UI_COLOR_TEXT);
 }
 
 //

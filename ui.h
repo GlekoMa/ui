@@ -8,6 +8,7 @@
 #define UI_CONTAINERPOOL_SIZE 48
 #define UI_CONTAINERSTACK_SIZE 32
 #define UI_IDSTACK_SIZE 32
+#define UI_MAX_WIDTHS 16
 
 #define ui_min(a, b) ((a) < (b) ? (a) : (b))
 #define ui_max(a, b) ((a) > (b) ? (a) : (b))
@@ -73,7 +74,19 @@ typedef struct {
 } UI_Container;
 
 typedef struct {
+    UI_Rect body;
+    UI_Vec2 position;
+    UI_Vec2 size;
+    int widths[UI_MAX_WIDTHS];
+    int items;
+    int item_index;
+    int next_row;
+} UI_Layout;
+
+typedef struct {
+    UI_Vec2 size;
     int padding;
+    int spacing;
     UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 
@@ -97,6 +110,7 @@ struct UI_Context {
     // retained state pools
     UI_Container containers[UI_CONTAINERPOOL_SIZE];
     UI_PoolItem container_pool[UI_CONTAINERPOOL_SIZE];
+    UI_Layout layout;
     // input state
     UI_Vec2 mouse_pos;
     bool mouse_pressed;
@@ -111,7 +125,9 @@ UI_Color ui_color(int r, int g, int b, int a);
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
 void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect);
 void ui_end_window(UI_Context* ctx);
-void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid);
+
+void ui_layout_row(UI_Context* ctx, int items, int height);
+void ui_label(UI_Context* ctx, const wchar_t* text);
 
 void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);

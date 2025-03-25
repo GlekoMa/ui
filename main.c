@@ -60,14 +60,31 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
-
-    ui_begin_window(g_ctx, "window title", ui_rect(100, 100, 150, 200));
-    ui_draw_control_text(g_ctx, L"Hello 不害臊的姑娘", ui_rect(0, 0, 100, 100), UI_COLOR_TEXT);
-    ui_end_window(g_ctx);
-
-    ui_begin_window(g_ctx, "window title 2", ui_rect(150, 150, 150, 200));
-    ui_end_window(g_ctx);
-
+    {
+        // window 1
+        ui_begin_window(g_ctx, "window title 1", ui_rect(100, 100, 150, 200));
+        {
+            ui_layout_row(ctx, 3, 24);
+            {
+                ui_label(g_ctx, L"Hello");
+                ui_label(g_ctx, L"Bye");
+                ui_label(g_ctx, L"不害臊的姑娘");
+                ui_label(g_ctx, L"Do you know");
+            }
+        }
+        ui_end_window(g_ctx);
+        // window 2
+        ui_begin_window(g_ctx, "window title 2", ui_rect(150, 150, 150, 200));
+        {
+            ui_layout_row(ctx, 2, 24);
+            {
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"No");
+                ui_label(g_ctx, L"复照青苔上");
+            }
+        }
+        ui_end_window(g_ctx);
+    }
     ui_end(ctx);
 }
 
