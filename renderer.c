@@ -45,7 +45,7 @@ typedef struct {
     ID3D11PixelShader*        pshader;
     ID3D11RenderTargetView*   rtview;
     ID3D11Texture2D*          texture;
-} Renderer_State;
+} RendererState;
 
 typedef struct {
     float pos[2];
@@ -62,7 +62,7 @@ typedef struct {
 static Vertex s_vert_data[BUFFER_SIZE * 4];
 static unsigned s_index_data[BUFFER_SIZE * 6];
 static int s_buf_idx = 0;
-static Renderer_State s_r_state;
+static RendererState s_r_state;
 
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 
