@@ -51,6 +51,7 @@ typedef struct {
     float pos[2];
     float uv[2];
     unsigned char col[4];
+    int tex_index; // 0: font atlas texture | 1: image texture
 } Vertex;
 
 typedef struct {
@@ -437,7 +438,7 @@ static void flush()
     s_buf_idx = 0;
 }
 
-static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color)
+static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
 {
     if (s_buf_idx == BUFFER_SIZE) { flush(); }
 
@@ -469,11 +470,11 @@ static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color)
     s_vert_data[vert_idx + 3].uv[0] = x + w;
     s_vert_data[vert_idx + 3].uv[1] = y + h;
 
-    // Update vbuffer (col)
-    memcpy((char*)(s_vert_data + vert_idx + 0) + offsetof(Vertex, col), &color, 4);
-    memcpy((char*)(s_vert_data + vert_idx + 1) + offsetof(Vertex, col), &color, 4);
-    memcpy((char*)(s_vert_data + vert_idx + 2) + offsetof(Vertex, col), &color, 4);
-    memcpy((char*)(s_vert_data + vert_idx + 3) + offsetof(Vertex, col), &color, 4);
+     // Update vbuffer (col & tex_index)
+     for (int i = 0; i < 4; i++) {
+         memcpy((char*)(s_vert_data + vert_idx + i) + offsetof(Vertex, col), &color, 4);
+         s_vert_data[vert_idx + i].tex_index = tex_index;
+     }
 
     // Update index buffer
     s_index_data[index_idx + 0] = vert_idx + 0;
@@ -613,41 +614,49 @@ void r_init()
 
     // Create hlsl
     const char hlsl[] = ""
-                        "Texture2D mytexture : register(t0);                                                     \n"
-                        "SamplerState mysampler : register(s0);                                                  \n"
-                        "                                                                                        \n"
-                        "cbuffer cbuffer0 : register(b0)                                                         \n"
-                        "{                                                                                       \n"
-                        "    float4x4 projection_matrix;                                                         \n"
-                        "};                                                                                      \n"
-                        "                                                                                        \n"
-                        "struct VS_Input                                                                         \n"
-                        "{                                                                                       \n"
-                        "    float2 pos : POSITION;                                                              \n"
-                        "    float2 uv : UV;                                                                     \n"
-                        "    float4 col : COLOR;                                                                 \n"
-                        "};                                                                                      \n"
-                        "                                                                                        \n"
-                        "struct PS_INPUT                                                                         \n"
-                        "{                                                                                       \n"
-                        "    float4 pos : SV_POSITION;                                                           \n"
-                        "    float2 uv : TEXCOORD;                                                               \n"
-                        "    float4 col : COLOR;                                                                 \n"
-                        "};                                                                                      \n"
-                        "                                                                                        \n"
-                        "PS_INPUT vs(VS_Input input)                                                             \n"
-                        "{                                                                                       \n"
-                        "    PS_INPUT output;                                                                    \n"
-                        "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f));                 \n"
-                        "    output.uv = input.uv;                                                               \n"
-                        "    output.col = input.col;                                                             \n"
-                        "    return output;                                                                      \n"
-                        "}                                                                                       \n"
-                        "                                                                                        \n"
-                        "float4 ps(PS_INPUT input) : SV_TARGET                                                   \n"
-                        "{                                                                                       \n"
-                        "    return float4(mytexture.Sample(mysampler, input.uv).rrrr) * input.col;              \n"
-                        "}                                                                                       \n";
+                        "Texture2D mytexture : register(t0);                                     \n"
+                        "SamplerState mysampler : register(s0);                                  \n"
+                        "                                                                        \n"
+                        "cbuffer cbuffer0 : register(b0)                                         \n"
+                        "{                                                                       \n"
+                        "    float4x4 projection_matrix;                                         \n"
+                        "};                                                                      \n"
+                        "                                                                        \n"
+                        "struct VS_Input                                                         \n"
+                        "{                                                                       \n"
+                        "    float2 pos : POSITION;                                              \n"
+                        "    float2 uv : UV;                                                     \n"
+                        "    float4 col : COLOR;                                                 \n"
+                        "    int tex_index : TEXINDEX;                                           \n"
+                        "};                                                                      \n"
+                        "                                                                        \n"
+                        "struct PS_INPUT                                                         \n"
+                        "{                                                                       \n"
+                        "    float4 pos : SV_POSITION;                                           \n"
+                        "    float2 uv : TEXCOORD;                                               \n"
+                        "    float4 col : COLOR;                                                 \n"
+                        "    int tex_index : TEXINDEX;                                           \n"
+                        "};                                                                      \n"
+                        "                                                                        \n"
+                        "PS_INPUT vs(VS_Input input)                                             \n"
+                        "{                                                                       \n"
+                        "    PS_INPUT output;                                                    \n"
+                        "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f)); \n"
+                        "    output.uv = input.uv;                                               \n"
+                        "    output.col = input.col;                                             \n"
+                        "    output.tex_index = input.tex_index;                                 \n"
+                        "    return output;                                                      \n"
+                        "}                                                                       \n"
+                        "                                                                        \n"
+                        "float4 ps(PS_INPUT input) : SV_TARGET                                   \n"
+                        "{                                                                       \n"
+                        "    float4 tex_color = mytexture.Sample(mysampler, input.uv);           \n"
+                        "    if (input.tex_index == 0) {                                         \n"
+                        "        return float4(tex_color.rrrr) * input.col;                      \n"
+                        "    } else {                                                            \n"
+                        "        return tex_color * input.col;                                   \n"
+                        "    }                                                                   \n"
+                        "}                                                                       \n";
 
     // Create input layout, vertex shader, pixel shader
     {
@@ -663,9 +672,10 @@ void r_init()
         D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", flags, 0, &pblob, NULL);
         D3D11_INPUT_ELEMENT_DESC desc[] =
         {
-            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, pos), D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "UV",       0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, uv),  D3D11_INPUT_PER_VERTEX_DATA, 0 },
-            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(Vertex, col), D3D11_INPUT_PER_VERTEX_DATA, 0 }
+            { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, pos),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "UV",       0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, uv),        D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(Vertex, col),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
+            { "TEXINDEX", 0, DXGI_FORMAT_R32_SINT,       0, offsetof(Vertex, tex_index), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
         ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc),
                                        ID3D10Blob_GetBufferPointer(vblob), ID3D10Blob_GetBufferSize(vblob),
@@ -697,7 +707,7 @@ void r_clear(UI_Color color)
 
 void r_draw_rect(UI_Rect rect, UI_Color color)
 {
-    push_rect(rect, s_atlas[0].src, color);
+    push_rect(rect, s_atlas[0].src, color, 0);
 }
 
 void r_draw_icon(int id, UI_Rect rect, UI_Color color)
@@ -705,7 +715,7 @@ void r_draw_icon(int id, UI_Rect rect, UI_Color color)
     UI_Rect src = s_atlas[id].src;
     int x = rect.x + (rect.w - src.w) / 2;
     int y = rect.y + (rect.h - src.h) / 2;
-    push_rect(ui_rect(x, y, src.w, src.h), src, color);
+    push_rect(ui_rect(x, y, src.w, src.h), src, color, 0);
 }
 
 // TODO: need better performance
@@ -740,7 +750,7 @@ void r_draw_text(const wchar_t* text, UI_Vec2 pos, UI_Color color)
         dst.y += (int)b->yoff;
         dst.w = src.w;
         dst.h = src.h;
-        push_rect(dst, src, color);
+        push_rect(dst, src, color, 0);
 
         dst.x += (int)(b->xadvance - b->xoff);
         dst.y -= (int)b->yoff;
