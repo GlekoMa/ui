@@ -19,10 +19,13 @@
     } while (0)
 
 static UI_Style default_style = {
-  {
-    { 206, 206, 206, 255 }, // MU_COLOR_BORDER
-    { 250, 250, 250, 255 }, // MU_COLOR_WINDOWBG
-  }
+    // padding
+    5,
+    {
+        {  56,  58,  66, 255 }, // MU_COLOR_TEXT
+        { 206, 206, 206, 255 }, // MU_COLOR_BORDER
+        { 250, 250, 250, 255 }, // MU_COLOR_WINDOWBG
+    }
 };
 
 UI_Vec2 ui_vec2(int x, int y)
@@ -264,6 +267,17 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
     }
 }
 
+static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 pos, UI_Color color)
+{
+    UI_Command* cmd;
+    if (len < 0) { len = (int)wcslen(str); }
+    cmd = ui_push_command(ctx, UI_COMMAND_TEXT, sizeof(UI_TextCommand) + sizeof(wchar_t) * len);
+    memcpy(cmd->text.str, str, sizeof(wchar_t) * len);
+    cmd->text.str[len] = L'\0';
+    cmd->text.pos      = pos;
+    cmd->text.color    = color;
+}
+
 static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
 {
     ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y, rect.w - 2, 1), color);
@@ -281,6 +295,19 @@ static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 {
     ui_draw_rect(ctx, rect, ctx->style->colors[colorid]);
     ui_draw_box(ctx, expand_rect(rect, 1), ctx->style->colors[UI_COLOR_BORDER]);
+}
+
+//
+// control
+//
+
+void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
+{
+    UI_Vec2 pos = {
+        .x = rect.x + ctx->style->padding,
+        .y = rect.y + (rect.h - ctx->text_height()) / 2,
+    };
+    ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
 }
 
 //

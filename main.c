@@ -60,10 +60,14 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
+
     ui_begin_window(g_ctx, "window title", ui_rect(100, 100, 150, 200));
+    ui_draw_control_text(g_ctx, L"Hello 不害臊的姑娘", ui_rect(0, 0, 100, 100), UI_COLOR_TEXT);
     ui_end_window(g_ctx);
+
     ui_begin_window(g_ctx, "window title 2", ui_rect(150, 150, 150, 200));
     ui_end_window(g_ctx);
+
     ui_end(ctx);
 }
 
@@ -143,15 +147,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         while (ui_next_command(g_ctx, &cmd)) {
             switch(cmd->type) {
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
+                case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
             }
         }
-
-        // Test
-        wchar_t s[] = L"Do you know 不害臊的姑娘";
-        r_draw_rect(ui_rect(0, 0, g_ctx->text_width(s, -1), g_ctx->text_height()),
-                    ui_color(200, 200, 200, 255));
-        r_draw_text(s, ui_vec2(0, 0), ui_color(56, 58, 66, 255));
-        r_draw_icon(1, ui_rect(0, 40, 24, 24), ui_color(0, 255, 0, 255));
 
         r_present();
     }

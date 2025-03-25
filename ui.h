@@ -24,6 +24,7 @@
 ///
 
 enum {
+    UI_COLOR_TEXT,
     UI_COLOR_BORDER,
     UI_COLOR_WINDOWBG,
     UI_COLOR_MAX
@@ -39,6 +40,7 @@ enum {
 enum {
     UI_COMMAND_JUMP = 1,
     UI_COMMAND_RECT,
+    UI_COMMAND_TEXT,
     UI_COMMAND_MAX
 };
 
@@ -54,12 +56,14 @@ typedef struct { UI_Id id; int last_update; } UI_PoolItem;
 typedef struct { int type, size; } UI_BaseCommand;
 typedef struct { UI_BaseCommand base; void *dst; } UI_JumpCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
+typedef struct { UI_BaseCommand base; UI_Vec2 pos; UI_Color color; wchar_t str[1]; } UI_TextCommand;
 
 typedef union {
     int type;
     UI_BaseCommand base;
     UI_JumpCommand jump;
     UI_RectCommand rect;
+    UI_TextCommand text;
 } UI_Command;
 
 typedef struct {
@@ -69,6 +73,7 @@ typedef struct {
 } UI_Container;
 
 typedef struct {
+    int padding;
     UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 
@@ -106,6 +111,7 @@ UI_Color ui_color(int r, int g, int b, int a);
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
 void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect);
 void ui_end_window(UI_Context* ctx);
+void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid);
 
 void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);
