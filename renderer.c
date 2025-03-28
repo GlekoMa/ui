@@ -39,7 +39,8 @@ typedef struct {
     ID3D11Buffer*             vbuffer;
     ID3D11Buffer*             ibuffer;
     ID3D11Buffer*             cbuffer;
-	ID3D11BlendState*         blend_state;
+    ID3D11BlendState*         blend_state;
+    ID3D11RasterizerState*    raster_state;
     ID3D11InputLayout*        layout;
     ID3D11VertexShader*       vshader;
     ID3D11PixelShader*        pshader;
@@ -427,6 +428,7 @@ static void flush()
     ID3D11DeviceContext_VSSetConstantBuffers(s_r_state.context, 0, 1, &s_r_state.cbuffer);
     ID3D11DeviceContext_VSSetShader(s_r_state.context, s_r_state.vshader, NULL, 0); // VS: Vertex Shader
     ID3D11DeviceContext_RSSetViewports(s_r_state.context, 1, &viewport); // RS: Rasterizer Stage
+    ID3D11DeviceContext_RSSetState(s_r_state.context, s_r_state.raster_state);
     ID3D11DeviceContext_PSSetShader(s_r_state.context, s_r_state.pshader, NULL, 0); // PS: Pixel Shader
     ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &s_r_state.texture_view);
     ID3D11DeviceContext_PSSetSamplers(s_r_state.context, 0, 1, &s_r_state.sampler_state);
@@ -612,51 +614,15 @@ void r_init()
         ID3D11Device_CreateBlendState(s_r_state.device, &desc, &s_r_state.blend_state);
     }
 
-    // Create hlsl
-    const char hlsl[] = ""
-                        "Texture2D mytexture : register(t0);                                     \n"
-                        "SamplerState mysampler : register(s0);                                  \n"
-                        "                                                                        \n"
-                        "cbuffer cbuffer0 : register(b0)                                         \n"
-                        "{                                                                       \n"
-                        "    float4x4 projection_matrix;                                         \n"
-                        "};                                                                      \n"
-                        "                                                                        \n"
-                        "struct VS_Input                                                         \n"
-                        "{                                                                       \n"
-                        "    float2 pos : POSITION;                                              \n"
-                        "    float2 uv : UV;                                                     \n"
-                        "    float4 col : COLOR;                                                 \n"
-                        "    int tex_index : TEXINDEX;                                           \n"
-                        "};                                                                      \n"
-                        "                                                                        \n"
-                        "struct PS_INPUT                                                         \n"
-                        "{                                                                       \n"
-                        "    float4 pos : SV_POSITION;                                           \n"
-                        "    float2 uv : TEXCOORD;                                               \n"
-                        "    float4 col : COLOR;                                                 \n"
-                        "    int tex_index : TEXINDEX;                                           \n"
-                        "};                                                                      \n"
-                        "                                                                        \n"
-                        "PS_INPUT vs(VS_Input input)                                             \n"
-                        "{                                                                       \n"
-                        "    PS_INPUT output;                                                    \n"
-                        "    output.pos = mul(projection_matrix, float4(input.pos, 0.0f, 1.0f)); \n"
-                        "    output.uv = input.uv;                                               \n"
-                        "    output.col = input.col;                                             \n"
-                        "    output.tex_index = input.tex_index;                                 \n"
-                        "    return output;                                                      \n"
-                        "}                                                                       \n"
-                        "                                                                        \n"
-                        "float4 ps(PS_INPUT input) : SV_TARGET                                   \n"
-                        "{                                                                       \n"
-                        "    float4 tex_color = mytexture.Sample(mysampler, input.uv);           \n"
-                        "    if (input.tex_index == 0) {                                         \n"
-                        "        return float4(tex_color.rrrr) * input.col;                      \n"
-                        "    } else {                                                            \n"
-                        "        return tex_color * input.col;                                   \n"
-                        "    }                                                                   \n"
-                        "}                                                                       \n";
+    // Create rasterizer state
+    {
+        D3D11_RASTERIZER_DESC desc = {
+            .FillMode = D3D11_FILL_SOLID,
+            .CullMode = D3D11_CULL_NONE,
+            .ScissorEnable = TRUE,
+        };
+        ID3D11Device_CreateRasterizerState(s_r_state.device, &desc, &s_r_state.raster_state);
+    }
 
     // Create input layout, vertex shader, pixel shader
     {
@@ -756,6 +722,18 @@ int r_get_text_width(const wchar_t* text, int len)
 int r_get_text_height(void)
 {
     return 24;
+}
+
+void r_set_clip_rect(UI_Rect rect) {
+    flush();
+
+    D3D11_RECT scissor_rect = {
+        .left = rect.x,
+        .top = rect.y,
+        .right = rect.x + rect.w,
+        .bottom = rect.y + rect.h,
+    };
+    ID3D11DeviceContext_RSSetScissorRects(s_r_state.context, 1, &scissor_rect);
 }
 
 void r_present()
