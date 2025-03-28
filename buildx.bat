@@ -33,7 +33,7 @@ for /f %%q in ("%~dp0.") do set ProjectName=%%~nxq
 set ProjectName=%ProjectName:-=_%
 
 :: --- Kill previous process ---
-tasklist | find "raddbg.exe" >nul && taskkill /F /IM raddbg.exe 2>nul
+REM tasklist | find "raddbg.exe" >nul && taskkill /F /IM raddbg.exe 2>nul
 tasklist | find "%ProjectName%.exe" >nul && taskkill /F /IM %ProjectName%.exe 2>nul
 
 :: --- Choose compiler ---
