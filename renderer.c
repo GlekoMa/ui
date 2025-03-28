@@ -660,16 +660,6 @@ void r_init()
 
     // Create input layout, vertex shader, pixel shader
     {
-        UINT flags = D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR | D3DCOMPILE_ENABLE_STRICTNESS | D3DCOMPILE_WARNINGS_ARE_ERRORS;
-#ifndef NDEBUG
-        flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-#else
-        flags |= D3DCOMPILE_OPTIMIZATION_LEVEL3;
-#endif
-        ID3DBlob* vblob;
-        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "vs", "vs_5_0", flags, 0, &vblob, NULL);
-        ID3DBlob* pblob;
-        D3DCompile(hlsl, sizeof(hlsl), NULL, NULL, NULL, "ps", "ps_5_0", flags, 0, &pblob, NULL);
         D3D11_INPUT_ELEMENT_DESC desc[] =
         {
             { "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, offsetof(Vertex, pos),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -677,16 +667,11 @@ void r_init()
             { "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, offsetof(Vertex, col),       D3D11_INPUT_PER_VERTEX_DATA, 0 },
             { "TEXINDEX", 0, DXGI_FORMAT_R32_SINT,       0, offsetof(Vertex, tex_index), D3D11_INPUT_PER_VERTEX_DATA, 0 },
         };
-        ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc),
-                                       ID3D10Blob_GetBufferPointer(vblob), ID3D10Blob_GetBufferSize(vblob),
-                                       &s_r_state.layout);
-        ID3D11Device_CreateVertexShader(s_r_state.device, ID3D10Blob_GetBufferPointer(vblob),
-                                        ID3D10Blob_GetBufferSize(vblob), NULL, &s_r_state.vshader);
-        ID3D11Device_CreatePixelShader(s_r_state.device, ID3D10Blob_GetBufferPointer(pblob),
-                                       ID3D10Blob_GetBufferSize(pblob), NULL, &s_r_state.pshader);
-
-        ID3D10Blob_Release(pblob);
-        ID3D10Blob_Release(vblob);
+        #include "d3d11_vshader.h"
+        #include "d3d11_pshader.h"
+        ID3D11Device_CreateVertexShader(s_r_state.device, d3d11_vshader, sizeof(d3d11_vshader), NULL, &s_r_state.vshader);
+        ID3D11Device_CreatePixelShader(s_r_state.device, d3d11_pshader, sizeof(d3d11_pshader), NULL, &s_r_state.pshader);
+        ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc), d3d11_vshader, sizeof(d3d11_vshader), &s_r_state.layout);
     }
 
     // Prepare a void render target view
