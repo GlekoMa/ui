@@ -46,12 +46,14 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_ctx->mouse_pos.y = HIWORD(lparam);
 
             // Handle window dragging
-            if (s_is_dragging) {
+            if (s_is_dragging) 
+            {
                 POINT cursor_pos;
                 GetCursorPos(&cursor_pos);
                 int dx = cursor_pos.x - s_drag_start_pos.x;
                 int dy = cursor_pos.y - s_drag_start_pos.y;
-                if (dx != 0 || dy != 0) {
+                if (dx != 0 || dy != 0) 
+                {
                     RECT rect;
                     GetWindowRect(window, &rect);
                     SetWindowPos(window, NULL, rect.left + dx, rect.top + dy, 0, 0,
@@ -183,8 +185,10 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         // Render
         r_clear(ui_color(255, 255, 255, 255));
         UI_Command* cmd = NULL;
-        while (ui_next_command(g_ctx, &cmd)) {
-            switch(cmd->type) {
+        while (ui_next_command(g_ctx, &cmd)) 
+        {
+            switch(cmd->type) 
+            {
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
                 case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
                 case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;

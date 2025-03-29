@@ -101,7 +101,8 @@ void get_fixed_dir_from_appdata(const char* dir_name, char* fixed_dir)
 void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
 {
     // For development: Recursively delete the target directory if it exists
-    if (PathFileExistsA(fixed_dir)) {
+    if (PathFileExistsA(fixed_dir)) 
+    {
         char del_path[MAX_PATH + 2]; // +2 for double null termination
         strcpy(del_path, fixed_dir);
         del_path[strlen(fixed_dir) + 1] = 0; // double null terminate
@@ -400,8 +401,10 @@ static void get_atlas(unsigned char* temp_bitmap)
             int white_box_size = 3;
             int white_box_x = ATLAS_WIDTH - white_box_size;
             int white_box_y = ATLAS_HEIGHT - white_box_size;
-            for (int y = 0; y < white_box_size; y++) {
-                for (int x = 0; x < white_box_size; x++) {
+            for (int y = 0; y < white_box_size; y++) 
+            {
+                for (int x = 0; x < white_box_size; x++) 
+                {
                     temp_bitmap[(white_box_y + y) * ATLAS_WIDTH + (white_box_x + x)] = 255;
                 }
             }
@@ -504,7 +507,8 @@ static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
     }
 
      // Update vbuffer (col & tex_index)
-     for (int i = 0; i < 4; i++) {
+     for (int i = 0; i < 4; i++) 
+     {
          memcpy((char*)(s_vert_data + vert_idx + i) + offsetof(Vertex, col), &color, 4);
          s_vert_data[vert_idx + i].tex_index = tex_index;
      }
@@ -755,9 +759,9 @@ int r_get_text_height(void)
     return 24;
 }
 
-void r_set_clip_rect(UI_Rect rect) {
+void r_set_clip_rect(UI_Rect rect) 
+{
     flush(NULL);
-
     D3D11_RECT scissor_rect = {
         .left = rect.x,
         .top = rect.y,

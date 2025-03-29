@@ -1,4 +1,3 @@
-#include "renderer.h"
 #define _AMD64_
 #include <debugapi.h>
 #include <stdio.h>
@@ -107,7 +106,8 @@ static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
     return cmd;
 }
 
-static void ui_set_clip(UI_Context* ctx, UI_Rect rect) {
+static void ui_set_clip(UI_Context* ctx, UI_Rect rect) 
+{
   UI_Command* cmd;
   cmd = ui_push_command(ctx, UI_COMMAND_CLIP, sizeof(UI_ClipCommand));
   cmd->clip.rect = rect;
@@ -258,9 +258,8 @@ static UI_Rect ui_layout_next(UI_Context* ctx)
     UI_Rect    res;
 
     // handle next row
-    if (layout->item_index == layout->items) {
+    if (layout->item_index == layout->items) 
         ui_layout_row(ctx, layout->items, layout->size.y);
-    }
 
     // get res
     res.x = layout->position.x;
