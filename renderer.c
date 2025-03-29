@@ -61,6 +61,19 @@ typedef struct {
     int xoff, yoff, xadvance;
 } Atlas;
 
+typedef struct {
+    ID3D11ShaderResourceView* view;
+    int width;
+    int height;
+} ImageResource;
+
+// Store loaded images
+typedef struct {
+    ImageResource* resources;
+    int capacity;
+    int count;
+} ImageCache;
+
 static Vertex s_vert_data[BUFFER_SIZE * 4];
 static unsigned s_index_data[BUFFER_SIZE * 6];
 static int s_buf_idx = 0;
@@ -69,6 +82,7 @@ static RendererState s_r_state;
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 
 static Atlas s_atlas[NUM_CHARS];
+static ImageCache s_image_cache;
 
 //
 // Atlas save helper
@@ -407,7 +421,7 @@ static void get_atlas(unsigned char* temp_bitmap)
 // Renderer
 //
 
-static void flush()
+static void flush(ID3D11ShaderResourceView* texture_view)
 {
     // Map vertex & index buffer
     map_vertex_index_buffer(s_r_state.context, s_r_state.vbuffer, s_r_state.ibuffer, g_client_width, g_client_height);
@@ -430,7 +444,10 @@ static void flush()
     ID3D11DeviceContext_RSSetViewports(s_r_state.context, 1, &viewport); // RS: Rasterizer Stage
     ID3D11DeviceContext_RSSetState(s_r_state.context, s_r_state.raster_state);
     ID3D11DeviceContext_PSSetShader(s_r_state.context, s_r_state.pshader, NULL, 0); // PS: Pixel Shader
-    ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &s_r_state.texture_view);
+    if (!texture_view)
+        ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &s_r_state.texture_view);
+    else
+        ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &texture_view);
     ID3D11DeviceContext_PSSetSamplers(s_r_state.context, 0, 1, &s_r_state.sampler_state);
     ID3D11DeviceContext_OMSetRenderTargets(s_r_state.context, 1, &s_r_state.rtview, NULL); // OM: Output Merger
 	ID3D11DeviceContext_OMSetBlendState(s_r_state.context, s_r_state.blend_state, NULL, 0xffffffff);
@@ -442,7 +459,7 @@ static void flush()
 
 static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
 {
-    if (s_buf_idx == BUFFER_SIZE) { flush(); }
+    if (s_buf_idx == BUFFER_SIZE) { flush(NULL); }
 
     int vert_idx  = s_buf_idx * 4;
     int index_idx = s_buf_idx * 6;
@@ -459,18 +476,32 @@ static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
     s_vert_data[vert_idx + 3].pos[1] = (float)dst.y + dst.h;
 
     // Update vbuffer (uv)
-    float x = src.x / (float)ATLAS_WIDTH;
-    float y = src.y / (float)ATLAS_HEIGHT;
-    float w = src.w / (float)ATLAS_WIDTH;
-    float h = src.h / (float)ATLAS_HEIGHT;
-    s_vert_data[vert_idx + 0].uv[0] = x;
-    s_vert_data[vert_idx + 0].uv[1] = y;
-    s_vert_data[vert_idx + 1].uv[0] = x + w;
-    s_vert_data[vert_idx + 1].uv[1] = y;
-    s_vert_data[vert_idx + 2].uv[0] = x;
-    s_vert_data[vert_idx + 2].uv[1] = y + h;
-    s_vert_data[vert_idx + 3].uv[0] = x + w;
-    s_vert_data[vert_idx + 3].uv[1] = y + h;
+    if (tex_index == 0)
+    {
+        float x = src.x / (float)ATLAS_WIDTH;
+        float y = src.y / (float)ATLAS_HEIGHT;
+        float w = src.w / (float)ATLAS_WIDTH;
+        float h = src.h / (float)ATLAS_HEIGHT;
+        s_vert_data[vert_idx + 0].uv[0] = x;
+        s_vert_data[vert_idx + 0].uv[1] = y;
+        s_vert_data[vert_idx + 1].uv[0] = x + w;
+        s_vert_data[vert_idx + 1].uv[1] = y;
+        s_vert_data[vert_idx + 2].uv[0] = x;
+        s_vert_data[vert_idx + 2].uv[1] = y + h;
+        s_vert_data[vert_idx + 3].uv[0] = x + w;
+        s_vert_data[vert_idx + 3].uv[1] = y + h;
+    }
+    else
+    {
+        s_vert_data[vert_idx + 0].uv[0] = 0;
+        s_vert_data[vert_idx + 0].uv[1] = 0;
+        s_vert_data[vert_idx + 1].uv[0] = 1;
+        s_vert_data[vert_idx + 1].uv[1] = 0;
+        s_vert_data[vert_idx + 2].uv[0] = 0;
+        s_vert_data[vert_idx + 2].uv[1] = 1;
+        s_vert_data[vert_idx + 3].uv[0] = 1;
+        s_vert_data[vert_idx + 3].uv[1] = 1;
+    }
 
      // Update vbuffer (col & tex_index)
      for (int i = 0; i < 4; i++) {
@@ -535,7 +566,7 @@ void r_init()
         ID3D11Device_CreateSamplerState(s_r_state.device, &desc, &s_r_state.sampler_state);
     }
 
-    // Create texture buffer (atlas)
+    // Create texture buffer (font)
     {
         unsigned char* temp_bitmap = malloc(ATLAS_WIDTH * ATLAS_HEIGHT);
         get_atlas(temp_bitmap);
@@ -725,7 +756,7 @@ int r_get_text_height(void)
 }
 
 void r_set_clip_rect(UI_Rect rect) {
-    flush();
+    flush(NULL);
 
     D3D11_RECT scissor_rect = {
         .left = rect.x,
@@ -736,14 +767,99 @@ void r_set_clip_rect(UI_Rect rect) {
     ID3D11DeviceContext_RSSetScissorRects(s_r_state.context, 1, &scissor_rect);
 }
 
+int r_load_image(const char* path) 
+{
+    // load image data using stb_image
+    int width, height, channels;
+    unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
+    expect(data);
+
+    // create texture
+    D3D11_TEXTURE2D_DESC desc = 
+    {
+        .Width = width,
+        .Height = height,
+        .MipLevels = 1,
+        .ArraySize = 1,
+        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+        .SampleDesc.Count = 1,
+        .Usage = D3D11_USAGE_IMMUTABLE,
+        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+    };
+    D3D11_SUBRESOURCE_DATA initial = 
+    {
+        .pSysMem = data,
+        .SysMemPitch = width * 4,
+    };
+    ID3D11Texture2D* texture;
+    ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &initial, &texture);
+    
+    // create view
+    ID3D11ShaderResourceView* view;
+    ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, NULL, &view);
+    ID3D11Texture2D_Release(texture);
+    stbi_image_free(data);
+
+    // add to cache
+    if (s_image_cache.count >= s_image_cache.capacity) 
+    {
+        s_image_cache.capacity = s_image_cache.capacity ? s_image_cache.capacity * 2 : 16;
+        s_image_cache.resources = realloc(s_image_cache.resources, s_image_cache.capacity * sizeof(ImageResource));
+    }
+
+    int id = s_image_cache.count++;
+    s_image_cache.resources[id] = (ImageResource)
+    {
+        .view = view,
+        .width = width,
+        .height = height
+    };
+    return id;
+}
+
+void r_draw_image(int image_id, UI_Rect rect) 
+{
+    if (image_id < 0 || image_id >= s_image_cache.count) return;
+    
+    ImageResource* img = &s_image_cache.resources[image_id];
+
+    // calculate aspect ratio preserved dimensions
+    float img_ratio = (float)img->width / img->height;
+    float rect_ratio = (float)rect.w / rect.h;
+    
+    UI_Rect dst;
+    if (img_ratio > rect_ratio) 
+    {
+        dst.w = rect.w;
+        dst.h = (int)(rect.w / img_ratio);
+    } 
+    else 
+    {
+        dst.h = rect.h;
+        dst.w = (int)(rect.h * img_ratio);
+    }
+    
+    // center in rect
+    dst.x = rect.x + (rect.w - dst.w) / 2;
+    dst.y = rect.y + (rect.h - dst.h) / 2;
+
+    // set image texture
+    push_rect(dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
+    flush(s_image_cache.resources[image_id].view);
+}
+
 void r_present()
 {
-    flush();
+    flush(NULL);
     IDXGISwapChain1_Present(s_r_state.swapchain, 1, 0);
 }
 
 void r_clean()
-{
+{   
+    for (int i = 0; i < s_image_cache.count; i++)
+    {
+        ID3D11ShaderResourceView_Release(s_image_cache.resources[i].view);
+    }
     ID3D11RenderTargetView_Release(s_r_state.rtview);
     ID3D11RasterizerState_Release(s_r_state.raster_state);
     ID3D11SamplerState_Release(s_r_state.sampler_state);

@@ -15,5 +15,7 @@ void r_draw_text(const wchar_t* text, UI_Vec2 pos, UI_Color color);
 int r_get_text_width(const wchar_t* text, int len);
 int r_get_text_height(void);
 void r_set_clip_rect(UI_Rect rect);
+int r_load_image(const char* path);
+void r_draw_image(int image_id, UI_Rect rect);
 void r_present();
 void r_clean();

@@ -190,7 +190,8 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
                 case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;
             }
         }
-
+        r_draw_image(r_load_image("C:/Users/niko1/repos/ui/assets/test.png"), ui_rect(0, 0, 100, 100));
+        r_draw_image(r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"), ui_rect(0, 100, 100, 100));
         r_present();
     }
 
