@@ -745,6 +745,7 @@ void r_present()
 void r_clean()
 {
     ID3D11RenderTargetView_Release(s_r_state.rtview);
+    ID3D11RasterizerState_Release(s_r_state.raster_state);
     ID3D11SamplerState_Release(s_r_state.sampler_state);
     ID3D11ShaderResourceView_Release(s_r_state.texture_view);
     ID3D11Buffer_Release(s_r_state.vbuffer);
