@@ -14,8 +14,10 @@
 
 int g_client_width = 800;
 int g_client_height = 600;
-
 UI_Context* g_ctx;
+
+static int s_is_dragging = false;
+static POINT s_drag_start_pos;
 
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
@@ -42,12 +44,31 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_MOUSEMOVE:
             g_ctx->mouse_pos.x = LOWORD(lparam);
             g_ctx->mouse_pos.y = HIWORD(lparam);
+
+            // Handle window dragging
+            if (s_is_dragging) {
+                POINT cursor_pos;
+                GetCursorPos(&cursor_pos);
+                int dx = cursor_pos.x - s_drag_start_pos.x;
+                int dy = cursor_pos.y - s_drag_start_pos.y;
+                if (dx != 0 || dy != 0) {
+                    RECT rect;
+                    GetWindowRect(window, &rect);
+                    SetWindowPos(window, NULL, rect.left + dx, rect.top + dy, 0, 0,
+                                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+                    // update s_drag_start_pos to current pos
+                    s_drag_start_pos = cursor_pos;
+                }
+            }
             return 0;
         case WM_LBUTTONDOWN:
             g_ctx->mouse_pressed = true;
+            s_is_dragging = true;
+            GetCursorPos(&s_drag_start_pos);
             return 0;
         case WM_LBUTTONUP:
             g_ctx->mouse_pressed = false;
+            s_is_dragging = false;
             return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
