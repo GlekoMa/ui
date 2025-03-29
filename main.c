@@ -65,6 +65,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_ctx->mouse_pressed = true;
             s_is_dragging = true;
             GetCursorPos(&s_drag_start_pos);
+            SetCapture(window);
             return 0;
         case WM_LBUTTONUP:
             g_ctx->mouse_pressed = false;
