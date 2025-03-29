@@ -21,12 +21,14 @@
     } while (0)
 
 static UI_Style default_style = {
-    // size | padding | spacing
-    { 68, 10 }, 5, 4,
+    // size | padding | spacing | title_height
+    { 68, 10 }, 5, 4, 26,
     {
-        {  56,  58,  66, 255 }, // MU_COLOR_TEXT
-        { 206, 206, 206, 255 }, // MU_COLOR_BORDER
-        { 250, 250, 250, 255 }, // MU_COLOR_WINDOWBG
+        { 56,  58,  66,  255 }, // UI_COLOR_TEXT
+        { 18,  18,  18,  255 }, // UI_COLOR_TITLETEXT
+        { 238, 238, 238, 255 }, // UI_COLOR_TITLEBG
+        { 206, 206, 206, 255 }, // UI_COLOR_BORDER
+        { 250, 250, 250, 255 }, // UI_COLOR_WINDOWBG
     }
 };
 
@@ -51,6 +53,12 @@ static UI_Rect expand_rect(UI_Rect rect, int n)
 {
     return ui_rect(rect.x - n, rect.y - n, rect.w + n * 2, rect.h + n * 2);
 }
+
+//
+// function declare
+//
+
+static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid);
 
 //
 // commandlist
@@ -352,21 +360,30 @@ static void end_root_container(UI_Context* ctx)
 // window
 //
 
-void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect)
+void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
 {
-    UI_Id id  = ui_get_id(ctx, title, (int)strlen(title));
+    UI_Id id  = ui_get_id(ctx, title, (int)(sizeof(wchar_t) * wcslen(title)));
     UI_Container* cnt = get_container(ctx, id);
     push(ctx->id_stack, id);
 
     if (cnt->rect.w == 0) { cnt->rect = rect; }
     begin_root_container(ctx, cnt);
+    UI_Rect body = cnt->rect;
 
     // draw frame
     ctx->draw_frame(ctx, cnt->rect, UI_COLOR_WINDOWBG);
 
+    // draw title bar
+    UI_Rect tr = rect;
+    tr.h = ctx->style->title_height;
+    ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
+    ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
+    body.y += tr.h;
+    body.h -= tr.h;
+
     // set layout
     memset(&ctx->layout, 0, sizeof(ctx->layout));
-    ctx->layout.body = expand_rect(cnt->rect, -ctx->style->padding);
+    ctx->layout.body = expand_rect(body, -ctx->style->padding);
 }
 
 void ui_end_window(UI_Context* ctx)
@@ -433,11 +450,6 @@ static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect re
             .x = rect.x + ctx->style->padding,
             .y = rect.y + (rect.h - ctx->text_height()) / 2,
         };
-        ui_draw_box(
-            ctx, 
-            ui_rect(pos.x, pos.y, r_get_text_width(str, (int)wcslen(str)), r_get_text_height()), 
-            ui_color(0, 0, 255, 255)
-        );
         ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
     }
     ui_pop_clip_rect(ctx);

@@ -62,7 +62,7 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        ui_begin_window(g_ctx, "window title 1", ui_rect(100, 100, 150, 200));
+        ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
         {
             ui_layout_row(ctx, 3, 24);
             {
@@ -74,7 +74,7 @@ static void process_frame(UI_Context* ctx)
         }
         ui_end_window(g_ctx);
         // window 2
-        ui_begin_window(g_ctx, "window title 2", ui_rect(150, 150, 150, 200));
+        ui_begin_window(g_ctx, L"window title 2", ui_rect(150, 150, 150, 200));
         {
             ui_layout_row(ctx, 2, 24);
             {

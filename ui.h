@@ -32,6 +32,8 @@ enum {
 
 enum {
     UI_COLOR_TEXT,
+    UI_COLOR_TITLETEXT,
+    UI_COLOR_TITLEBG,
     UI_COLOR_BORDER,
     UI_COLOR_WINDOWBG,
     UI_COLOR_MAX
@@ -96,6 +98,7 @@ typedef struct {
     UI_Vec2 size;
     int padding;
     int spacing;
+    int title_height;
     UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 
@@ -133,7 +136,7 @@ UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);
 
 int ui_next_command(UI_Context* ctx, UI_Command** cmd);
-void ui_begin_window(UI_Context* ctx, const char* title, UI_Rect rect);
+void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect);
 void ui_end_window(UI_Context* ctx);
 
 void ui_layout_row(UI_Context* ctx, int items, int height);
