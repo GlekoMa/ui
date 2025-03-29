@@ -28,12 +28,12 @@ if "%1"=="-r" (
 )
 
 :: Set root directory name as exe name
-for /f %%q in ("%~dp0.") do set ProjectName=%%~nxq
-:: Replace '-' with '_' in ProjectName
-set ProjectName=%ProjectName:-=_%
+for /f %%q in ("%~dp0.") do set ExeName=%%~nxq
+:: Replace '-' with '_' in ExeName
+set ProjectName=%ExeName:-=_%
 
 :: --- Kill previous process ---
-REM tasklist | find "raddbg.exe" >nul && taskkill /F /IM raddbg.exe 2>nul
+tasklist | find "raddbg.exe" >nul && taskkill /F /IM raddbg.exe 2>nul
 tasklist | find "%ProjectName%.exe" >nul && taskkill /F /IM %ProjectName%.exe 2>nul
 
 :: --- Choose compiler ---
@@ -83,12 +83,12 @@ for %%f in (*.c) do (
 )
 
 :: --- Compile resource if exists ---
-if exist "%ProjectName%.rc" (
-    rc /nologo /fo %BuildDir%\%ProjectName%.res %ProjectName%.rc
-    set SourceFiles=%SourceFiles% %BuildDir%\%ProjectName%.res
+if exist "resource.rc" (
+    rc /nologo /fo %BuildDir%\resource.res resource.rc
+    set SourceFiles=%SourceFiles% %BuildDir%\resource.res
 )
 
-set OutputExe=%BuildDir%\%ProjectName%.exe
+set OutputExe=%BuildDir%\%ExeName%.exe
 
 :: --- Set base compile command ---
 set BaseCompileCommand=%Compiler% %CompilerFlags% %SourceFiles% /Fe:%OutputExe% /Fo:%BuildDir%\ /Fd:%BuildDir%\ /D_CRT_SECURE_NO_WARNINGS
@@ -119,8 +119,8 @@ if exist "shader.hlsl" (
     fxc.exe /nologo /T ps_5_0 /E ps /O3 /WX /Zpc /Ges /Fh d3d11_pshader.h /Vn d3d11_pshader /Qstrip_reflect /Qstrip_debug /Qstrip_priv shader.hlsl
 )
 
-if exist "%ProjectName%.manifest" (
-    %BaseCompileCommand% /link /MANIFEST:EMBED /MANIFESTINPUT:%ProjectName%.manifest
+if exist "main.manifest" (
+    %BaseCompileCommand% /link /MANIFEST:EMBED /MANIFESTINPUT:main.manifest
 ) else (
     %BaseCompileCommand%
 )
