@@ -778,30 +778,30 @@ int r_load_image(const char* path)
     unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
     expect(data);
 
-    // create texture
-    D3D11_TEXTURE2D_DESC desc = 
-    {
-        .Width = width,
-        .Height = height,
-        .MipLevels = 1,
-        .ArraySize = 1,
-        .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
-        .SampleDesc.Count = 1,
-        .Usage = D3D11_USAGE_IMMUTABLE,
-        .BindFlags = D3D11_BIND_SHADER_RESOURCE,
-    };
-    D3D11_SUBRESOURCE_DATA initial = 
-    {
-        .pSysMem = data,
-        .SysMemPitch = width * 4,
-    };
-    ID3D11Texture2D* texture;
-    ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &initial, &texture);
-    
-    // create view
+    // create texture view
     ID3D11ShaderResourceView* view;
-    ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, NULL, &view);
-    ID3D11Texture2D_Release(texture);
+    {
+        D3D11_TEXTURE2D_DESC desc = 
+        {
+            .Width = width,
+            .Height = height,
+            .MipLevels = 1,
+            .ArraySize = 1,
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+            .SampleDesc.Count = 1,
+            .Usage = D3D11_USAGE_IMMUTABLE,
+            .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+        };
+        D3D11_SUBRESOURCE_DATA initial = 
+        {
+            .pSysMem = data,
+            .SysMemPitch = width * 4,
+        };
+        ID3D11Texture2D* texture;
+        ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &initial, &texture);
+        ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, NULL, &view);
+        ID3D11Texture2D_Release(texture);
+    }
     stbi_image_free(data);
 
     // add to cache
