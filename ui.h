@@ -51,6 +51,7 @@ enum {
     UI_COMMAND_CLIP,
     UI_COMMAND_RECT,
     UI_COMMAND_TEXT,
+    UI_COMMAND_IMAGE,
     UI_COMMAND_MAX
 };
 
@@ -68,6 +69,7 @@ typedef struct { UI_BaseCommand base; void *dst; } UI_JumpCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; } UI_ClipCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
 typedef struct { UI_BaseCommand base; UI_Vec2 pos; UI_Color color; wchar_t str[1]; } UI_TextCommand;
+typedef struct { UI_BaseCommand base; UI_Rect rect; int image_id; } UI_ImageCommand;
 
 typedef union {
     int type;
@@ -76,6 +78,7 @@ typedef union {
     UI_ClipCommand clip;
     UI_RectCommand rect;
     UI_TextCommand text;
+    UI_ImageCommand image;
 } UI_Command;
 
 typedef struct {
@@ -141,6 +144,7 @@ void ui_end_window(UI_Context* ctx);
 
 void ui_layout_row(UI_Context* ctx, int items, int height);
 void ui_label(UI_Context* ctx, const wchar_t* text);
+void ui_image(UI_Context* ctx, int image_id);
 
 void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);

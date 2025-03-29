@@ -423,6 +423,17 @@ static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 p
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
+static void ui_draw_image(UI_Context* ctx, UI_Rect rect, int image_id)
+{
+    UI_Command* cmd;
+    if (rect.w > 0 && rect.h > 0)
+    {
+        cmd = ui_push_command(ctx, UI_COMMAND_IMAGE, sizeof(UI_ImageCommand));
+        cmd->image.rect = rect;
+        cmd->image.image_id = image_id;
+    }
+}
+
 static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
 {
     ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y, rect.w - 2, 1), color);
@@ -458,6 +469,12 @@ void ui_label(UI_Context* ctx, const wchar_t* text)
 {
     UI_Rect rect = ui_layout_next(ctx);
     ui_draw_control_text(ctx, text, rect, UI_COLOR_TEXT);
+}
+
+void ui_image(UI_Context* ctx, int image_id)
+{
+    UI_Rect rect = ui_layout_next(ctx);
+    ui_draw_image(ctx, rect, image_id);
 }
 
 //

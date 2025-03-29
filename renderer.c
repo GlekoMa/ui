@@ -821,7 +821,7 @@ int r_load_image(const char* path)
     return id;
 }
 
-void r_draw_image(int image_id, UI_Rect rect) 
+void r_draw_image(UI_Rect rect, int image_id) 
 {
     if (image_id < 0 || image_id >= s_image_cache.count) return;
     

@@ -105,6 +105,8 @@ static void process_frame(UI_Context* ctx)
                 ui_label(g_ctx, L"jack");
                 ui_label(g_ctx, L"No");
                 ui_label(g_ctx, L"复照青苔上");
+                ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test.png"));
+                ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"));
             }
         }
         ui_end_window(g_ctx);
@@ -192,10 +194,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
                 case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
                 case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;
+                case UI_COMMAND_IMAGE: r_draw_image(cmd->image.rect, cmd->image.image_id); break;
             }
         }
-        r_draw_image(r_load_image("C:/Users/niko1/repos/ui/assets/test.png"), ui_rect(0, 0, 100, 100));
-        r_draw_image(r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"), ui_rect(0, 100, 100, 100));
         r_present();
     }
 
