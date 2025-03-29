@@ -30,6 +30,8 @@ static UI_Style default_style = {
     }
 };
 
+static UI_Rect unclipped_rect = { 0, 0, 0x1000000, 0x1000000 };
+
 UI_Vec2 ui_vec2(int x, int y)
 {
     return (UI_Vec2){ x, y };
@@ -97,8 +99,14 @@ static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
     return cmd;
 }
 
+static void ui_set_clip(UI_Context* ctx, UI_Rect rect) {
+  UI_Command* cmd;
+  cmd = ui_push_command(ctx, UI_COMMAND_CLIP, sizeof(UI_ClipCommand));
+  cmd->clip.rect = rect;
+}
+
 //
-// id
+// id stack
 //
 
 // 32bit fnv-1a hash
@@ -125,6 +133,52 @@ static UI_Id ui_get_id(UI_Context* ctx, const void* data, int size)
 static void ui_pop_id(UI_Context* ctx)
 {
     pop(ctx->id_stack);
+}
+
+//
+// clip stack
+//
+
+static UI_Rect intersect_rects(UI_Rect r1, UI_Rect r2) 
+{
+    int x1 = ui_max(r1.x, r2.x);
+    int y1 = ui_max(r1.y, r2.y);
+    int x2 = ui_min(r1.x + r1.w, r2.x + r2.w);
+    int y2 = ui_min(r1.y + r1.h, r2.y + r2.h);
+
+    // if not intersect, return rect whose width/height is 0.
+    if (x2 < x1) { x2 = x1; }
+    if (y2 < y1) { y2 = y1; }
+
+    return ui_rect(x1, y1, x2 - x1, y2 - y1);
+}
+
+static UI_Rect ui_get_clip_rect(UI_Context* ctx)
+{
+    expect(ctx->clip_stack.idx > 0);
+    return ctx->clip_stack.items[ctx->clip_stack.idx - 1];
+}
+
+static void ui_pop_clip_rect(UI_Context *ctx) 
+{
+    pop(ctx->clip_stack);
+}
+
+static void ui_push_clip_rect(UI_Context* ctx, UI_Rect rect)
+{
+    UI_Rect last = ui_get_clip_rect(ctx);
+    UI_Rect inter = intersect_rects(rect, last);
+    push(ctx->clip_stack, inter);
+}
+
+static int ui_check_clip(UI_Context* ctx, UI_Rect r) 
+{
+    UI_Rect cr = ui_get_clip_rect(ctx);
+    if (r.x > cr.x + cr.w || r.x + r.w < cr.x ||
+        r.y > cr.y + cr.h || r.y + r.h < cr.y   ) { return UI_CLIP_ALL; }
+    if (r.x >= cr.x && r.x + r.w <= cr.x + cr.w &&
+        r.y >= cr.y && r.y + r.h <= cr.y + cr.h ) { return 0; }
+    return UI_CLIP_PART;
 }
 
 //
@@ -177,10 +231,13 @@ void ui_layout_row(UI_Context* ctx, int items, int height)
     UI_Layout* layout = &ctx->layout;
     expect(items <= UI_MAX_WIDTHS);
 
-    int cnt_width = ctx->container_stack.items[ctx->container_stack.idx-1]->rect.w;
-    int width = (int)(cnt_width / items);
     for (int i = 0; i < items; i++)
-        layout->widths[i] = width;
+    {
+        int cnt_width = ctx->container_stack.items[ctx->container_stack.idx - 1]->rect.w;
+        int p = ctx->style->padding;
+        int s = ctx->style->spacing;
+        layout->widths[i] = (int)((cnt_width - p * 2 - s * (items - 1)) / items);
+    }
     layout->items      = items;
     layout->position   = ui_vec2(0, layout->next_row);
     layout->size.y     = height;
@@ -275,12 +332,19 @@ static void begin_root_container(UI_Context* ctx, UI_Container* cnt)
     {
         ctx->next_hover_root = cnt;
     }
+
+    // clipping is reset here in case a root-container is made within another
+    // root-containers's begin/end block; this prevents the inner root-container
+    // being clipped to the outer
+    push(ctx->clip_stack, unclipped_rect);
 }
 
 static void end_root_container(UI_Context* ctx)
 {
     UI_Container* cnt = ui_get_current_container(ctx);
     cnt->tail = push_jump(ctx, NULL);
+    // pop base clip rect and container
+    ui_pop_clip_rect(ctx);
     pop_container(ctx);
 }
 
@@ -328,12 +392,19 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
 static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 pos, UI_Color color)
 {
     UI_Command* cmd;
+    UI_Rect rect = ui_rect(pos.x, pos.y, ctx->text_width(str, len), ctx->text_height());
+    int clipped = ui_check_clip(ctx, rect);
+    if (clipped == UI_CLIP_ALL) { return; }
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
+    // add command
     if (len < 0) { len = (int)wcslen(str); }
     cmd = ui_push_command(ctx, UI_COMMAND_TEXT, sizeof(UI_TextCommand) + sizeof(wchar_t) * len);
     memcpy(cmd->text.str, str, sizeof(wchar_t) * len);
     cmd->text.str[len] = L'\0';
     cmd->text.pos      = pos;
     cmd->text.color    = color;
+    // reset clipping if it was set
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
 static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
@@ -356,21 +427,26 @@ static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 
 static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
 {
-    UI_Vec2 pos = {
-        .x = rect.x + ctx->style->padding,
-        .y = rect.y + (rect.h - ctx->text_height()) / 2,
-    };
-    ui_draw_box(
-        ctx, 
-        ui_rect(pos.x, pos.y, r_get_text_width(str, (int)wcslen(str)), r_get_text_height()), 
-        ui_color(0, 0, 255, 255)
-    );
-    ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
+    ui_push_clip_rect(ctx, rect);
+    {
+        UI_Vec2 pos = {
+            .x = rect.x + ctx->style->padding,
+            .y = rect.y + (rect.h - ctx->text_height()) / 2,
+        };
+        ui_draw_box(
+            ctx, 
+            ui_rect(pos.x, pos.y, r_get_text_width(str, (int)wcslen(str)), r_get_text_height()), 
+            ui_color(0, 0, 255, 255)
+        );
+        ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
+    }
+    ui_pop_clip_rect(ctx);
 }
 
 void ui_label(UI_Context* ctx, const wchar_t* text)
 {
-    ui_draw_control_text(ctx, text, ui_layout_next(ctx), UI_COLOR_TEXT);
+    UI_Rect rect = ui_layout_next(ctx);
+    ui_draw_control_text(ctx, text, rect, UI_COLOR_TEXT);
 }
 
 //
@@ -401,6 +477,7 @@ void ui_end(UI_Context* ctx)
 {
     // check stacks
     expect(ctx->container_stack.idx == 0);
+    expect(ctx->clip_stack.idx      == 0);
     expect(ctx->id_stack.idx        == 0);
     
     // bring hover root to front if mouse was pressed

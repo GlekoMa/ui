@@ -121,9 +121,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         WNDCLASSW wc     = {};
         wc.lpfnWndProc   = window_proc;
         wc.hInstance     = GetModuleHandleW(NULL);
-        wc.lpszClassName = L"3-z-order_class";
+        wc.lpszClassName = L"ui";
         RegisterClassW(&wc);
-        g_window = CreateWindowExW(0, wc.lpszClassName, L"3-z-order", window_style,
+        g_window = CreateWindowExW(0, wc.lpszClassName, L"ui", window_style,
                                  rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top,
                                  NULL, NULL, wc.hInstance, NULL);
         // Disable window animation (e.g. pop up)
@@ -165,6 +165,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
             switch(cmd->type) {
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
                 case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
+                case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;
             }
         }
 

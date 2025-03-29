@@ -8,6 +8,7 @@
 #define UI_CONTAINERPOOL_SIZE 48
 #define UI_CONTAINERSTACK_SIZE 32
 #define UI_IDSTACK_SIZE 32
+#define UI_CLIPSTACK_SIZE 32
 #define UI_MAX_WIDTHS 16
 
 #define ui_min(a, b) ((a) < (b) ? (a) : (b))
@@ -25,6 +26,11 @@
 ///
 
 enum {
+  UI_CLIP_PART = 1,
+  UI_CLIP_ALL
+};
+
+enum {
     UI_COLOR_TEXT,
     UI_COLOR_BORDER,
     UI_COLOR_WINDOWBG,
@@ -40,6 +46,7 @@ enum {
 
 enum {
     UI_COMMAND_JUMP = 1,
+    UI_COMMAND_CLIP,
     UI_COMMAND_RECT,
     UI_COMMAND_TEXT,
     UI_COMMAND_MAX
@@ -56,6 +63,7 @@ typedef struct { UI_Id id; int last_update; } UI_PoolItem;
 
 typedef struct { int type, size; } UI_BaseCommand;
 typedef struct { UI_BaseCommand base; void *dst; } UI_JumpCommand;
+typedef struct { UI_BaseCommand base; UI_Rect rect; } UI_ClipCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
 typedef struct { UI_BaseCommand base; UI_Vec2 pos; UI_Color color; wchar_t str[1]; } UI_TextCommand;
 
@@ -63,6 +71,7 @@ typedef union {
     int type;
     UI_BaseCommand base;
     UI_JumpCommand jump;
+    UI_ClipCommand clip;
     UI_RectCommand rect;
     UI_TextCommand text;
 } UI_Command;
@@ -107,6 +116,7 @@ struct UI_Context {
     ui_stack(UI_Container*, UI_ROOTLIST_SIZE) root_list;
     ui_stack(UI_Container*, UI_CONTAINERSTACK_SIZE) container_stack;
     ui_stack(UI_Id, UI_IDSTACK_SIZE) id_stack;
+    ui_stack(UI_Rect, UI_CLIPSTACK_SIZE) clip_stack;
     // retained state pools
     UI_Container containers[UI_CONTAINERPOOL_SIZE];
     UI_PoolItem container_pool[UI_CONTAINERPOOL_SIZE];
