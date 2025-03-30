@@ -3,10 +3,6 @@
 #pragma clang diagnostic ignored "-Weverything"
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "thirdparty/stb_truetype.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "thirdparty/stb_image.h"
-#define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "thirdparty/stb_image_write.h"
 #pragma clang diagnostic pop
 
 #define COBJMACROS
@@ -124,10 +120,12 @@ void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
     // Create the fixed dir
     CreateDirectoryA(fixed_dir, NULL);
 
-    // Create atlas.png
-    char fixed_atlas_png_path[MAX_PATH];
-    sprintf(fixed_atlas_png_path, "%s\\atlas.png", fixed_dir);
-    stbi_write_png(fixed_atlas_png_path, ATLAS_WIDTH, ATLAS_HEIGHT, 1, temp_bitmap, ATLAS_WIDTH);
+    // Create atlas.raw
+    char fixed_atlas_raw_path[MAX_PATH];
+    sprintf(fixed_atlas_raw_path, "%s\\atlas.raw", fixed_dir);
+    FILE* fp_raw = fopen(fixed_atlas_raw_path, "wb");
+    fwrite(temp_bitmap, 1, ATLAS_WIDTH * ATLAS_HEIGHT, fp_raw);
+    fclose(fp_raw);
 
     // Create atlas.dat
     char fixed_atlas_dat_path[MAX_PATH];
@@ -139,13 +137,12 @@ void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
 
 void load_atlas_cache(const char* fixed_dir, unsigned char* temp_bitmap) 
 {
-    // Load png
-    char fixed_atlas_png_path[MAX_PATH];
-    sprintf(fixed_atlas_png_path, "%s\\atlas.png", fixed_dir);
-    int width, height, channels;
-    unsigned char* bitmap = stbi_load(fixed_atlas_png_path, &width, &height, &channels, 1);
-    memcpy(temp_bitmap, bitmap, ATLAS_WIDTH * ATLAS_HEIGHT);
-    stbi_image_free(bitmap);
+    // Load raw
+    char fixed_atlas_raw_path[MAX_PATH];
+    sprintf(fixed_atlas_raw_path, "%s\\atlas.raw", fixed_dir);
+    FILE* fp_raw = fopen(fixed_atlas_raw_path, "rb");
+    fread(temp_bitmap, 1, ATLAS_WIDTH * ATLAS_HEIGHT, fp_raw);
+    fclose(fp_raw);
     
     // Load dat
     char fixed_atlas_dat_path[MAX_PATH];
