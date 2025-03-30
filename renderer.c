@@ -1,5 +1,3 @@
-#include "ui.h"
-#include <stdlib.h>
 #pragma warning(disable: 4068)
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Weverything"
@@ -18,8 +16,11 @@
 #include <dxgi1_3.h>
 #include <d3dcompiler.h>
 #include <dxgidebug.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include "renderer.h"
+#include "ui.h"
+#include "image.h"
 
 #define BUFFER_SIZE 16384
 
@@ -689,6 +690,23 @@ void r_clear(UI_Color color)
 {
     float color_f[4] = { color.r / 255.f, color.g / 255.f, color.b / 255.f, color.a / 255.f };
     ID3D11DeviceContext_ClearRenderTargetView(s_r_state.context, s_r_state.rtview, color_f);
+
+    // draw dot background
+    UI_Rect client_rect = ui_rect(0, 0, g_client_width, g_client_height);
+    UI_Color dot_color = ui_color(
+        (int)(color.r * 0.9f),
+        (int)(color.g * 0.9f),
+        (int)(color.b * 0.9f),
+        (int)(color.a)
+    );
+    const int dot_spacing = 15;
+    const int dot_size = 2;
+    for (int y = client_rect.y + dot_spacing; y < client_rect.y + client_rect.h; y += dot_spacing) {
+        for (int x = client_rect.x + dot_spacing; x < client_rect.x + client_rect.w; x += dot_spacing) {
+            UI_Rect dot = ui_rect(x, y, dot_size, dot_size);
+            r_draw_rect(dot, dot_color);
+        }
+    }
 }
 
 void r_draw_rect(UI_Rect rect, UI_Color color)
@@ -773,9 +791,9 @@ void r_set_clip_rect(UI_Rect rect)
 
 int r_load_image(const char* path) 
 {
-    // load image data using stb_image
-    int width, height, channels;
-    unsigned char* data = stbi_load(path, &width, &height, &channels, 4);
+    // load image data
+    unsigned width, height;
+    unsigned char* data = image_load(path, &width, &height);
     expect(data);
 
     // create texture view
@@ -802,7 +820,7 @@ int r_load_image(const char* path)
         ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, NULL, &view);
         ID3D11Texture2D_Release(texture);
     }
-    stbi_image_free(data);
+    free(data);
 
     // add to cache
     if (s_image_cache.count >= s_image_cache.capacity) 

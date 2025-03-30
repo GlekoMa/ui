@@ -6,11 +6,14 @@
 #pragma comment(lib, "dxguid")
 #pragma comment(lib, "dxgi")
 #pragma comment(lib, "d3dcompiler")
+#pragma comment(lib, "ole32")
+#pragma comment(lib, "windowscodecs")
 
 #include <windows.h>
 #include <dwmapi.h>
 #include "ui.h"
 #include "renderer.h"
+#include "image.h"
 
 int g_client_width = 800;
 int g_client_height = 600;
@@ -157,10 +160,12 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         DwmSetWindowAttribute(g_window, DWMWA_TRANSITIONS_FORCEDISABLED, &attrib, sizeof(attrib));
     }
 
-    // Init renderer & context
+    // Init image factory & renderer & context
+    image_init(); 
     r_init();
     g_ctx = malloc(sizeof(UI_Context));
     ui_init(g_ctx);
+
     g_ctx->text_width = text_width;
     g_ctx->text_height = text_height;
 
@@ -202,5 +207,6 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
 
     // Clean
     r_clean();
+    image_clean();
     return 0;
 }
