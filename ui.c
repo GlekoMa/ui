@@ -1,5 +1,5 @@
 #define _AMD64_
-#include <debugapi.h>
+#include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "ui.h"
@@ -200,11 +200,20 @@ static void ui_set_focus(UI_Context* ctx, UI_Id id)
     ctx->updated_focus = true;
 }
 
-static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
+static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect, bool hand_cursor)
 {
     int mouseover = ui_mouse_over(ctx, rect);
-
-    if (mouseover && !ctx->mouse_held) { ctx->hover = id; }
+    if (mouseover)
+    {
+        if (hand_cursor)
+        {
+            SetCursor(LoadCursor(NULL, IDC_HAND));
+        }
+        if (!ctx->mouse_held)
+        {
+            ctx->hover = id;
+        }
+    }
     if (ctx->focus == id)
     {
         ctx->updated_focus = true;
@@ -214,9 +223,14 @@ static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
     if (ctx->hover == id)
     {
         if (ctx->mouse_click)
+        {
             ui_set_focus(ctx, id);
+        }
         else if (!mouseover)
+        {
             ctx->hover = 0;
+            SetCursor(LoadCursor(NULL, IDC_ARROW));
+        }
     }
 }
 
@@ -445,7 +459,7 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
             base.x = b.x + b.w;
             base.w = sz;
             // handle input
-            ui_update_control(ctx, id, base);
+            ui_update_control(ctx, id, base, true);
             if (ctx->focus == id && ctx->mouse_held)
             {
                 cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
@@ -489,7 +503,7 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
         tr.h = ctx->style->title_height;
         ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
         UI_Id id = ui_get_id(ctx, "!title", 6);
-        ui_update_control(ctx, id, tr);
+        ui_update_control(ctx, id, tr, true);
         ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
         if (id == ctx->focus && ctx->mouse_held)
         {
@@ -509,7 +523,7 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     ctx->layout.body.x -= cnt->scroll.x;
     ctx->layout.body.y -= cnt->scroll.y;
     ui_push_clip_rect(ctx, cnt->body);
-    ui_update_control(ctx, id, cnt->rect);
+    ui_update_control(ctx, id, cnt->rect, false);
 }
 
 void ui_end_window(UI_Context* ctx)
