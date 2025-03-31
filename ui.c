@@ -204,15 +204,13 @@ static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
 {
     int mouseover = ui_mouse_over(ctx, rect);
 
-    if (ctx->focus == id) { ctx->updated_focus = true; }
     if (mouseover && !ctx->mouse_held) { ctx->hover = id; }
-
     if (ctx->focus == id)
     {
+        ctx->updated_focus = true;
         if (ctx->mouse_click && !mouseover) { ui_set_focus(ctx, 0); }
         if (!ctx->mouse_held) { ui_set_focus(ctx, 0); }
     }
-
     if (ctx->hover == id)
     {
         if (ctx->mouse_click)
@@ -504,6 +502,7 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     ctx->layout.body.x -= cnt->scroll.x;
     ctx->layout.body.y -= cnt->scroll.y;
     ui_push_clip_rect(ctx, cnt->body);
+    ui_update_control(ctx, id, cnt->rect);
 }
 
 void ui_end_window(UI_Context* ctx)
