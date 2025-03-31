@@ -458,6 +458,13 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
             thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y); // a*(b/c)
             thumb.y += cnt->scroll.y * (base.h - thumb.h) / maxscroll; // (a/c)*b
             ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
+
+            // set this as the scroll_target (will get scrolled on mousewheel)
+            // if the mouse is over it
+            if (ui_mouse_over(ctx, b))
+            {
+                ctx->scroll_target = cnt;
+            }
         }
     }
     ui_pop_clip_rect(ctx);
@@ -615,8 +622,10 @@ void ui_init(UI_Context* ctx)
 
 void ui_begin(UI_Context* ctx)
 {
+    expect(ctx->text_width && ctx->text_height);
     ctx->command_list.idx = 0;
     ctx->root_list.idx = 0;
+    ctx->scroll_target = NULL;
     ctx->hover_root = ctx->next_hover_root;
     ctx->next_hover_root  = NULL;
     ctx->mouse_delta.x = ctx->mouse_pos.x - ctx->last_mouse_pos.x;
@@ -636,6 +645,13 @@ void ui_end(UI_Context* ctx)
     expect(ctx->clip_stack.idx      == 0);
     expect(ctx->id_stack.idx        == 0);
 
+    // handle scroll input
+    if (ctx->scroll_target)
+    {
+        ctx->scroll_target->scroll.x += ctx->scroll_delta.x;
+        ctx->scroll_target->scroll.y += ctx->scroll_delta.y;
+    }
+
     // unset focus if focus id was not touched this frame
     if (!ctx->updated_focus) { ctx->focus = 0; }
     ctx->updated_focus = false;
@@ -650,6 +666,7 @@ void ui_end(UI_Context* ctx)
 
     /* reset input state */
     ctx->mouse_click = false;
+    ctx->scroll_delta = ui_vec2(0, 0);
     ctx->last_mouse_pos = ctx->mouse_pos;
 
     // sort root containers by zindex

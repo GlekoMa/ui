@@ -75,6 +75,10 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
         case WM_LBUTTONUP:
             g_ctx->mouse_held = false;
             return 0;
+        case WM_MOUSEWHEEL:
+            short delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            g_ctx->scroll_delta.y += delta / -10;
+            return 0;
         case WM_DESTROY:
             PostQuitMessage(0);
             return 0;

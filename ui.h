@@ -145,6 +145,7 @@ struct UI_Context {
     UI_Vec2 mouse_pos;
     UI_Vec2 last_mouse_pos;
     UI_Vec2 mouse_delta;
+    UI_Vec2 scroll_delta;
     bool mouse_held;
     bool mouse_click;
 };
