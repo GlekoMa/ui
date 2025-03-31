@@ -200,7 +200,7 @@ static void ui_set_focus(UI_Context* ctx, UI_Id id)
     ctx->updated_focus = true;
 }
 
-static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect, int opt)
+static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
 {
     int mouseover = ui_mouse_over(ctx, rect);
 
@@ -447,7 +447,7 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
             base.x = b.x + b.w;
             base.w = sz;
             // handle input
-            ui_update_control(ctx, id, base, 0);
+            ui_update_control(ctx, id, base);
             if (ctx->focus == id && ctx->mouse_held)
             {
                 cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
@@ -479,12 +479,21 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     ctx->draw_frame(ctx, cnt->rect, UI_COLOR_WINDOWBG);
 
     // draw title bar
-    UI_Rect tr = rect;
-    tr.h = ctx->style->title_height;
-    ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
-    ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
-    cnt->body.y += tr.h;
-    cnt->body.h -= tr.h;
+    {
+        UI_Rect tr = cnt->rect;
+        tr.h = ctx->style->title_height;
+        ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
+        UI_Id id = ui_get_id(ctx, "!title", 6);
+        ui_update_control(ctx, id, tr);
+        ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
+        if (id == ctx->focus && ctx->mouse_held)
+        {
+            cnt->rect.x += ctx->mouse_delta.x;
+            cnt->rect.y += ctx->mouse_delta.y;
+        }
+        cnt->body.y += tr.h;
+        cnt->body.h -= tr.h;
+    }
 
     // set scrollbar
     scrollbar(ctx, cnt);

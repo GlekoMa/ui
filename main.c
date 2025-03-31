@@ -90,17 +90,17 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        // ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
-        // {
-        //     ui_layout_row(ctx, 3, 24);
-        //     {
-        //         ui_label(g_ctx, L"Hello");
-        //         ui_label(g_ctx, L"Bye");
-        //         ui_label(g_ctx, L"不害臊的姑娘");
-        //         ui_label(g_ctx, L"Do you know");
-        //     }
-        // }
-        // ui_end_window(g_ctx);
+        ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
+        {
+            ui_layout_row(ctx, 3, 24);
+            {
+                ui_label(g_ctx, L"Hello");
+                ui_label(g_ctx, L"Bye");
+                ui_label(g_ctx, L"不害臊的姑娘");
+                ui_label(g_ctx, L"Do you know");
+            }
+        }
+        ui_end_window(g_ctx);
         // window 2
         ui_begin_window(g_ctx, L"window title 2", ui_rect(150, 150, 150, 200));
         {
