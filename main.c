@@ -49,31 +49,32 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_ctx->mouse_pos.y = HIWORD(lparam);
 
             // Handle window dragging
-            if (s_is_dragging) 
-            {
-                POINT cursor_pos;
-                GetCursorPos(&cursor_pos);
-                int dx = cursor_pos.x - s_drag_start_pos.x;
-                int dy = cursor_pos.y - s_drag_start_pos.y;
-                if (dx != 0 || dy != 0) 
-                {
-                    RECT rect;
-                    GetWindowRect(window, &rect);
-                    SetWindowPos(window, NULL, rect.left + dx, rect.top + dy, 0, 0,
-                                 SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
-                    // update s_drag_start_pos to current pos
-                    s_drag_start_pos = cursor_pos;
-                }
-            }
+            // if (s_is_dragging) 
+            // {
+            //     POINT cursor_pos;
+            //     GetCursorPos(&cursor_pos);
+            //     int dx = cursor_pos.x - s_drag_start_pos.x;
+            //     int dy = cursor_pos.y - s_drag_start_pos.y;
+            //     if (dx != 0 || dy != 0) 
+            //     {
+            //         RECT rect;
+            //         GetWindowRect(window, &rect);
+            //         SetWindowPos(window, NULL, rect.left + dx, rect.top + dy, 0, 0,
+            //                      SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+            //         // update s_drag_start_pos to current pos
+            //         s_drag_start_pos = cursor_pos;
+            //     }
+            // }
             return 0;
         case WM_LBUTTONDOWN:
-            g_ctx->mouse_pressed = true;
+            g_ctx->mouse_held = true;
+            g_ctx->mouse_click = true;
             s_is_dragging = true;
             GetCursorPos(&s_drag_start_pos);
             SetCapture(window);
             return 0;
         case WM_LBUTTONUP:
-            g_ctx->mouse_pressed = false;
+            g_ctx->mouse_held = false;
             s_is_dragging = false;
             return 0;
         case WM_DESTROY:
@@ -89,41 +90,41 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
-        {
-            ui_layout_row(ctx, 3, 24);
-            {
-                ui_label(g_ctx, L"Hello");
-                ui_label(g_ctx, L"Bye");
-                ui_label(g_ctx, L"不害臊的姑娘");
-                ui_label(g_ctx, L"Do you know");
-            }
-        }
-        ui_end_window(g_ctx);
+        // ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
+        // {
+        //     ui_layout_row(ctx, 3, 24);
+        //     {
+        //         ui_label(g_ctx, L"Hello");
+        //         ui_label(g_ctx, L"Bye");
+        //         ui_label(g_ctx, L"不害臊的姑娘");
+        //         ui_label(g_ctx, L"Do you know");
+        //     }
+        // }
+        // ui_end_window(g_ctx);
         // window 2
         ui_begin_window(g_ctx, L"window title 2", ui_rect(150, 150, 150, 200));
         {
             ui_layout_row(ctx, 2, 24);
             {
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
+                ui_label(g_ctx, L"jackdoyouknow");
                 // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test.png"));
                 // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"));
             }

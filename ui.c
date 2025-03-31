@@ -118,36 +118,6 @@ static void ui_set_clip(UI_Context* ctx, UI_Rect rect)
 }
 
 //
-// id stack
-//
-
-// 32bit fnv-1a hash
-#define HASH_INITIAL 2166136261
-
-static void hash(UI_Id* hash, const void* data, int size)
-{
-    const unsigned char* p = data;
-    while (size--)
-    {
-        *hash = (*hash ^ *p++) * 16777619;
-    }
-}
-
-static UI_Id ui_get_id(UI_Context* ctx, const void* data, int size)
-{
-    int idx = ctx->id_stack.idx;
-    UI_Id res = (idx > 0) ? ctx->id_stack.items[idx - 1] : HASH_INITIAL;
-    hash(&res, data, size);
-    ctx->last_id = res;
-    return res;
-}
-
-static void ui_pop_id(UI_Context* ctx)
-{
-    pop(ctx->id_stack);
-}
-
-//
 // clip stack
 //
 
@@ -191,6 +161,95 @@ static int ui_check_clip(UI_Context* ctx, UI_Rect r)
     if (r.x >= cr.x && r.x + r.w <= cr.x + cr.w &&
         r.y >= cr.y && r.y + r.h <= cr.y + cr.h ) { return 0; }
     return UI_CLIP_PART;
+}
+
+//
+// mouse
+//
+
+static int in_hover_root(UI_Context* ctx)
+{
+    int i = ctx->container_stack.idx;
+    while (i--)
+    {
+        if (ctx->container_stack.items[i] == ctx->hover_root)
+            return 1;
+        // only root containers have their `head` field set; stop searching if we've
+        // reached the current root container
+        if (ctx->container_stack.items[i]->head)
+            break;
+    }
+    return 0;
+}
+
+static bool rect_overlaps_vec2(UI_Rect r, UI_Vec2 p)
+{
+    return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
+}
+
+static int ui_mouse_over(UI_Context* ctx, UI_Rect rect)
+{
+    return rect_overlaps_vec2(rect, ctx->mouse_pos) && 
+           rect_overlaps_vec2(ui_get_clip_rect(ctx), ctx->mouse_pos) &&
+           in_hover_root(ctx);
+}
+
+static void ui_set_focus(UI_Context* ctx, UI_Id id)
+{
+    ctx->focus = id;
+    ctx->updated_focus = true;
+}
+
+static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect, int opt)
+{
+    int mouseover = ui_mouse_over(ctx, rect);
+
+    if (ctx->focus == id) { ctx->updated_focus = true; }
+    if (mouseover && !ctx->mouse_held) { ctx->hover = id; }
+
+    if (ctx->focus == id)
+    {
+        if (ctx->mouse_click && !mouseover) { ui_set_focus(ctx, 0); }
+        if (!ctx->mouse_held) { ui_set_focus(ctx, 0); }
+    }
+
+    if (ctx->hover == id)
+    {
+        if (ctx->mouse_click)
+            ui_set_focus(ctx, id);
+        else if (!mouseover)
+            ctx->hover = 0;
+    }
+}
+
+//
+// id stack
+//
+
+// 32bit fnv-1a hash
+#define HASH_INITIAL 2166136261
+
+static void hash(UI_Id* hash, const void* data, int size)
+{
+    const unsigned char* p = data;
+    while (size--)
+    {
+        *hash = (*hash ^ *p++) * 16777619;
+    }
+}
+
+static UI_Id ui_get_id(UI_Context* ctx, const void* data, int size)
+{
+    int idx = ctx->id_stack.idx;
+    UI_Id res = (idx > 0) ? ctx->id_stack.items[idx - 1] : HASH_INITIAL;
+    hash(&res, data, size);
+    ctx->last_id = res;
+    return res;
+}
+
+static void ui_pop_id(UI_Context* ctx)
+{
+    pop(ctx->id_stack);
 }
 
 //
@@ -245,7 +304,7 @@ void ui_layout_row(UI_Context* ctx, int items, int height)
 
     for (int i = 0; i < items; i++)
     {
-        int cnt_width = ctx->container_stack.items[ctx->container_stack.idx - 1]->rect.w;
+        int cnt_width = ctx->container_stack.items[ctx->container_stack.idx - 1]->body.w;
         int p = ctx->style->padding;
         int s = ctx->style->spacing;
         layout->widths[i] = (int)((cnt_width - p * 2 - s * (items - 1)) / items);
@@ -332,11 +391,6 @@ static UI_Container* get_container(UI_Context* ctx, UI_Id id)
     }
 }
 
-static bool rect_overlaps_vec2(UI_Rect r, UI_Vec2 p)
-{
-    return p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h;
-}
-
 static void begin_root_container(UI_Context* ctx, UI_Container* cnt)
 {
     cnt->head = push_jump(ctx, NULL);
@@ -382,19 +436,29 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
         if (cs.y > cnt->body.h) { cnt->body.w -= sz; }
         UI_Rect b  = cnt->body;
 
-        // draw scrollbar
+        // only add scrollbar if content size is larger than body
         int maxscroll = cs.y - b.h;
         if (maxscroll > 0)
         {
             UI_Rect base, thumb;
+            UI_Id id = ui_get_id(ctx, "!scollbar", 10);
+            // get base
             base = b;
             base.x = b.x + b.w;
             base.w = sz;
+            // handle input
+            ui_update_control(ctx, id, base, 0);
+            if (ctx->focus == id && ctx->mouse_held)
+            {
+                cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
+            }
+            // clamp scroll to limits
+            cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
             // draw base and thumb
             ctx->draw_frame(ctx, base, UI_COLOR_SCROLLBASE);
             thumb = base;
-            thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y);
-            thumb.y += 0;
+            thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y); // a*(b/c)
+            thumb.y += cnt->scroll.y * (base.h - thumb.h) / maxscroll; // (a/c)*b
             ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
         }
     }
@@ -428,10 +492,14 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     // set layout
     memset(&ctx->layout, 0, sizeof(ctx->layout));
     ctx->layout.body = expand_rect(cnt->body, -ctx->style->padding);
+    ctx->layout.body.x -= cnt->scroll.x;
+    ctx->layout.body.y -= cnt->scroll.y;
+    ui_push_clip_rect(ctx, cnt->body);
 }
 
 void ui_end_window(UI_Context* ctx)
 {
+    ui_pop_clip_rect(ctx);
     end_root_container(ctx);
 }
 
@@ -541,7 +609,10 @@ void ui_begin(UI_Context* ctx)
 {
     ctx->command_list.idx = 0;
     ctx->root_list.idx = 0;
+    ctx->hover_root = ctx->next_hover_root;
     ctx->next_hover_root  = NULL;
+    ctx->mouse_delta.x = ctx->mouse_pos.x - ctx->last_mouse_pos.x;
+    ctx->mouse_delta.y = ctx->mouse_pos.y - ctx->last_mouse_pos.y;
     ctx->frame++;
 }
 
@@ -556,14 +627,22 @@ void ui_end(UI_Context* ctx)
     expect(ctx->container_stack.idx == 0);
     expect(ctx->clip_stack.idx      == 0);
     expect(ctx->id_stack.idx        == 0);
+
+    // unset focus if focus id was not touched this frame
+    if (!ctx->updated_focus) { ctx->focus = 0; }
+    ctx->updated_focus = false;
     
     // bring hover root to front if mouse was pressed
-    if (ctx->mouse_pressed && 
+    if (ctx->mouse_click && 
         ctx->next_hover_root &&
         ctx->next_hover_root->zindex < ctx->last_zindex)
     {
         ui_bring_to_front(ctx, ctx->next_hover_root);
     }
+
+    /* reset input state */
+    ctx->mouse_click = false;
+    ctx->last_mouse_pos = ctx->mouse_pos;
 
     // sort root containers by zindex
     int n = ctx->root_list.idx;

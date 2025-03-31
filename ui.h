@@ -13,6 +13,7 @@
 
 #define ui_min(a, b) ((a) < (b) ? (a) : (b))
 #define ui_max(a, b) ((a) > (b) ? (a) : (b))
+#define ui_clamp(x, a, b) ui_min(b, ui_max(a, x))
 #define ui_stack(T, n) struct { int idx; T items[n]; }
 #define expect(x)            \
     do                       \
@@ -121,10 +122,15 @@ struct UI_Context {
     void (*draw_frame)(UI_Context* ctx, UI_Rect rect, int colorid);
     // core state
     UI_Style* style;
+    UI_Id hover;
+    UI_Id focus;
     UI_Id last_id;
     int last_zindex;
+    bool updated_focus;
     int frame;
+    UI_Container* hover_root;
     UI_Container* next_hover_root;
+    UI_Container* scroll_target;
     // stack
     ui_stack(char, UI_COMMANDLIST_SIZE) command_list;
     ui_stack(UI_Container*, UI_ROOTLIST_SIZE) root_list;
@@ -137,7 +143,10 @@ struct UI_Context {
     UI_Layout layout;
     // input state
     UI_Vec2 mouse_pos;
-    bool mouse_pressed;
+    UI_Vec2 last_mouse_pos;
+    UI_Vec2 mouse_delta;
+    bool mouse_held;
+    bool mouse_click;
 };
 
 ///
