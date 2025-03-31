@@ -442,46 +442,43 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
     UI_Vec2 cs = cnt->content_size;
     cs.x += ctx->style->padding * 2;
     cs.y += ctx->style->padding * 2;
-    ui_push_clip_rect(ctx, cnt->body);
+
+    // resize body to make room for scrollbar
+    if (cs.y > cnt->body.h) { cnt->body.w -= sz; }
+    UI_Rect b  = cnt->body;
+
+    // only add scrollbar if content size is larger than body
+    int maxscroll = cs.y - b.h;
+    if (maxscroll > 0)
     {
-        // resize body to make room for scrollbar
-        if (cs.y > cnt->body.h) { cnt->body.w -= sz; }
-        UI_Rect b  = cnt->body;
-
-        // only add scrollbar if content size is larger than body
-        int maxscroll = cs.y - b.h;
-        if (maxscroll > 0)
+        UI_Rect base, thumb;
+        UI_Id id = ui_get_id(ctx, "!scollbar", 10);
+        // get base
+        base = b;
+        base.x = b.x + b.w;
+        base.w = sz;
+        // handle input
+        ui_update_control(ctx, id, base, true);
+        if (ctx->focus == id && ctx->mouse_held)
         {
-            UI_Rect base, thumb;
-            UI_Id id = ui_get_id(ctx, "!scollbar", 10);
-            // get base
-            base = b;
-            base.x = b.x + b.w;
-            base.w = sz;
-            // handle input
-            ui_update_control(ctx, id, base, true);
-            if (ctx->focus == id && ctx->mouse_held)
-            {
-                cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
-            }
-            // clamp scroll to limits
-            cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
-            // draw base and thumb
-            ctx->draw_frame(ctx, base, UI_COLOR_SCROLLBASE);
-            thumb = base;
-            thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y); // a*(b/c)
-            thumb.y += cnt->scroll.y * (base.h - thumb.h) / maxscroll; // (a/c)*b
-            ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
+            cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
+        }
+        // clamp scroll to limits
+        cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
+        // draw base and thumb
+        ctx->draw_frame(ctx, base, UI_COLOR_SCROLLBASE);
+        thumb = base;
+        thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y); // a*(b/c)
+        thumb.y += cnt->scroll.y * (base.h - thumb.h) / maxscroll; // (a/c)*b
+        ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
 
-            // set this as the scroll_target (will get scrolled on mousewheel)
-            // if the mouse is over it
-            if (ui_mouse_over(ctx, b))
-            {
-                ctx->scroll_target = cnt;
-            }
+        // set this as the scroll_target (will get scrolled on mousewheel)
+        // if the mouse is over it
+        if (ui_mouse_over(ctx, b))
+        {
+            ctx->scroll_target = cnt;
         }
     }
-    ui_pop_clip_rect(ctx);
 }
 
 void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
@@ -549,13 +546,13 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
 
 static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 pos, UI_Color color)
 {
-    UI_Command* cmd;
     UI_Rect rect = ui_rect(pos.x, pos.y, ctx->text_width(str, len), ctx->text_height());
     int clipped = ui_check_clip(ctx, rect);
     if (clipped == UI_CLIP_ALL) { return; }
     if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
     // add command
     if (len < 0) { len = (int)wcslen(str); }
+    UI_Command* cmd;
     cmd = ui_push_command(ctx, UI_COMMAND_TEXT, sizeof(UI_TextCommand) + sizeof(wchar_t) * len);
     memcpy(cmd->text.str, str, sizeof(wchar_t) * len);
     cmd->text.str[len] = L'\0';
@@ -567,6 +564,11 @@ static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 p
 
 static void ui_draw_image(UI_Context* ctx, UI_Rect rect, const char* path)
 {
+    // check if image needs to be clipped
+    int clipped = ui_check_clip(ctx, rect);
+    if (clipped == UI_CLIP_ALL) { return; }
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
+    // add command
     UI_Command* cmd;
     if (rect.w > 0 && rect.h > 0)
     {
@@ -574,6 +576,8 @@ static void ui_draw_image(UI_Context* ctx, UI_Rect rect, const char* path)
         cmd->image.rect = rect;
         cmd->image.path = path;
     }
+    // reset clipping if it was set
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
 static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
