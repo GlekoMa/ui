@@ -36,6 +36,8 @@ enum {
     UI_COLOR_TITLEBG,
     UI_COLOR_BORDER,
     UI_COLOR_WINDOWBG,
+    UI_COLOR_SCROLLBASE,
+    UI_COLOR_SCROLLTHUMB,
     UI_COLOR_MAX
 };
 
@@ -84,6 +86,9 @@ typedef union {
 typedef struct {
     UI_Command *head, *tail;
     UI_Rect rect;
+    UI_Rect body;
+    UI_Vec2 content_size;
+    UI_Vec2 scroll;
     int zindex;
 } UI_Container;
 
@@ -91,6 +96,7 @@ typedef struct {
     UI_Rect body;
     UI_Vec2 position;
     UI_Vec2 size;
+    UI_Vec2 max;
     int widths[UI_MAX_WIDTHS];
     int items;
     int item_index;
@@ -102,6 +108,8 @@ typedef struct {
     int padding;
     int spacing;
     int title_height;
+    int scrollbar_size;
+    int thumb_size;
     UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 

@@ -106,10 +106,26 @@ static void process_frame(UI_Context* ctx)
             ui_layout_row(ctx, 2, 24);
             {
                 ui_label(g_ctx, L"jack");
-                ui_label(g_ctx, L"No");
-                ui_label(g_ctx, L"复照青苔上");
-                ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test.png"));
-                ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"));
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                ui_label(g_ctx, L"jack");
+                // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test.png"));
+                // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"));
             }
         }
         ui_end_window(g_ctx);

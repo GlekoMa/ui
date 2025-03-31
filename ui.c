@@ -22,12 +22,16 @@
 static UI_Style default_style = {
     // size | padding | spacing | title_height
     { 68, 10 }, 5, 4, 26,
+    // scrollbar_size | thumb_size
+    12, 8,
     {
         { 56,  58,  66,  255 }, // UI_COLOR_TEXT
         { 18,  18,  18,  255 }, // UI_COLOR_TITLETEXT
         { 238, 238, 238, 255 }, // UI_COLOR_TITLEBG
         { 206, 206, 206, 255 }, // UI_COLOR_BORDER
         { 250, 250, 250, 255 }, // UI_COLOR_WINDOWBG
+        { 254, 254, 254, 255 }, // UI_COLOR_SCROLLBASE
+        { 218, 219, 222, 255 }  // UI_COLOR_SCROLLTHUMB
     }
 };
 
@@ -276,6 +280,10 @@ static UI_Rect ui_layout_next(UI_Context* ctx)
     res.x += layout->body.x;
     res.y += layout->body.y;
 
+    // update max position
+    layout->max.x = ui_max(layout->max.x, res.x + res.w);
+    layout->max.y = ui_max(layout->max.y, res.y + res.h);
+
     return res;
 }
 
@@ -291,6 +299,9 @@ static UI_Container* ui_get_current_container(UI_Context* ctx)
 
 static void pop_container(UI_Context* ctx)
 {
+    UI_Container *cnt = ui_get_current_container(ctx);
+    cnt->content_size.y = ctx->layout.max.y - ctx->layout.body.y;
+    cnt->content_size.x = ctx->layout.max.x - ctx->layout.body.x;
     pop(ctx->container_stack);
     ui_pop_id(ctx);
 }
@@ -359,6 +370,37 @@ static void end_root_container(UI_Context* ctx)
 // window
 //
 
+static void scrollbar(UI_Context* ctx, UI_Container* cnt)
+{
+    int     sz = ctx->style->scrollbar_size;
+    UI_Vec2 cs = cnt->content_size;
+    cs.x += ctx->style->padding * 2;
+    cs.y += ctx->style->padding * 2;
+    ui_push_clip_rect(ctx, cnt->body);
+    {
+        // resize body to make room for scrollbar
+        if (cs.y > cnt->body.h) { cnt->body.w -= sz; }
+        UI_Rect b  = cnt->body;
+
+        // draw scrollbar
+        int maxscroll = cs.y - b.h;
+        if (maxscroll > 0)
+        {
+            UI_Rect base, thumb;
+            base = b;
+            base.x = b.x + b.w;
+            base.w = sz;
+            // draw base and thumb
+            ctx->draw_frame(ctx, base, UI_COLOR_SCROLLBASE);
+            thumb = base;
+            thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y);
+            thumb.y += 0;
+            ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
+        }
+    }
+    ui_pop_clip_rect(ctx);
+}
+
 void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
 {
     UI_Id id  = ui_get_id(ctx, title, (int)(sizeof(wchar_t) * wcslen(title)));
@@ -367,7 +409,7 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
 
     if (cnt->rect.w == 0) { cnt->rect = rect; }
     begin_root_container(ctx, cnt);
-    UI_Rect body = cnt->rect;
+    cnt->body = cnt->rect;
 
     // draw frame
     ctx->draw_frame(ctx, cnt->rect, UI_COLOR_WINDOWBG);
@@ -377,12 +419,15 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     tr.h = ctx->style->title_height;
     ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
     ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
-    body.y += tr.h;
-    body.h -= tr.h;
+    cnt->body.y += tr.h;
+    cnt->body.h -= tr.h;
+
+    // set scrollbar
+    scrollbar(ctx, cnt);
 
     // set layout
     memset(&ctx->layout, 0, sizeof(ctx->layout));
-    ctx->layout.body = expand_rect(body, -ctx->style->padding);
+    ctx->layout.body = expand_rect(cnt->body, -ctx->style->padding);
 }
 
 void ui_end_window(UI_Context* ctx)
@@ -445,6 +490,10 @@ static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
 static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 {
     ui_draw_rect(ctx, rect, ctx->style->colors[colorid]);
+    if (colorid == UI_COLOR_SCROLLBASE || colorid == UI_COLOR_SCROLLTHUMB || colorid == UI_COLOR_TITLEBG)
+    {
+        return;
+    }
     ui_draw_box(ctx, expand_rect(rect, 1), ctx->style->colors[UI_COLOR_BORDER]);
 }
 
