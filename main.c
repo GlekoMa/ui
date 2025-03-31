@@ -92,46 +92,46 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        ui_begin_window(g_ctx, L"window title 1", ui_rect(100, 100, 150, 200));
+        ui_begin_window(ctx, L"window title 1", ui_rect(100, 100, 150, 200));
         {
             ui_layout_row(ctx, 3, 24);
             {
-                ui_label(g_ctx, L"Hello");
-                ui_label(g_ctx, L"Bye");
-                ui_label(g_ctx, L"不害臊的姑娘");
-                ui_label(g_ctx, L"Do you know");
+                ui_label(ctx, L"Hello");
+                ui_label(ctx, L"Bye");
+                ui_label(ctx, L"不害臊的姑娘");
+                ui_label(ctx, L"Do you know");
             }
         }
-        ui_end_window(g_ctx);
+        ui_end_window(ctx);
         // window 2
-        ui_begin_window(g_ctx, L"window title 2", ui_rect(150, 150, 150, 200));
+        ui_begin_window(ctx, L"window title 2", ui_rect(150, 150, 150, 200));
         {
             ui_layout_row(ctx, 2, 24);
             {
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                ui_label(g_ctx, L"jackdoyouknow");
-                // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test.png"));
-                // ui_image(ctx, r_load_image("C:/Users/niko1/repos/ui/assets/test2.png"));
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_label(ctx, L"jackdoyouknow");
+                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test.png");
+                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test2.png");
             }
         }
-        ui_end_window(g_ctx);
+        ui_end_window(ctx);
     }
     ui_end(ctx);
 }
@@ -218,7 +218,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
                 case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
                 case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
                 case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;
-                case UI_COMMAND_IMAGE: r_draw_image(cmd->image.rect, cmd->image.image_id); break;
+                case UI_COMMAND_IMAGE: r_draw_image(cmd->image.rect, cmd->image.path); break;
             }
         }
         r_present();

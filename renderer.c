@@ -18,14 +18,18 @@
 #include "ui.h"
 #include "image.h"
 
-#define BUFFER_SIZE 16384
 
+#define BUFFER_SIZE 16384
 // atlas
 #define NUM_CHARS_SYMBOL 4
 #define NUM_CHARS_ASCII 95
 #define NUM_CHARS_ZH 3522
-// the addition '1' is the data of 3x3 white square (as atlas[0])
-#define NUM_CHARS NUM_CHARS_SYMBOL + NUM_CHARS_ASCII + NUM_CHARS_ZH + 1
+#define NUM_CHARS NUM_CHARS_SYMBOL + NUM_CHARS_ASCII + NUM_CHARS_ZH + 1 // 1 is 3x3 white square
+// image
+#define MAX_IMAGE_PATH_RES_ENTRIES 128
+
+enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
+
 
 typedef struct {
     ID3D11Device*             device;
@@ -58,28 +62,34 @@ typedef struct {
     int xoff, yoff, xadvance;
 } Atlas;
 
+// store loaded images
 typedef struct {
     ID3D11ShaderResourceView* view;
     int width;
     int height;
 } ImageResource;
 
-// Store loaded images
 typedef struct {
     ImageResource* resources;
     int capacity;
     int count;
 } ImageCache;
 
+// map image path to image resource
+typedef struct {
+    const char* path;
+    ImageResource* resource;
+} PathResEntry;
+
+
 static Vertex s_vert_data[BUFFER_SIZE * 4];
 static unsigned s_index_data[BUFFER_SIZE * 6];
 static int s_buf_idx = 0;
 static RendererState s_r_state;
-
-enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
-
 static Atlas s_atlas[NUM_CHARS];
 static ImageCache s_image_cache;
+static PathResEntry s_image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
+
 
 //
 // Atlas save helper
@@ -786,7 +796,7 @@ void r_set_clip_rect(UI_Rect rect)
     ID3D11DeviceContext_RSSetScissorRects(s_r_state.context, 1, &scissor_rect);
 }
 
-int r_load_image(const char* path) 
+static ImageResource* r_load_image(const char* path) 
 {
     // load image data
     unsigned width, height;
@@ -826,21 +836,32 @@ int r_load_image(const char* path)
         s_image_cache.resources = realloc(s_image_cache.resources, s_image_cache.capacity * sizeof(ImageResource));
     }
 
-    int id = s_image_cache.count++;
-    s_image_cache.resources[id] = (ImageResource)
+    int n = s_image_cache.count;
+    expect(n < 128);
+    s_image_cache.resources[n] = (ImageResource)
     {
         .view = view,
         .width = width,
         .height = height
     };
-    return id;
+    s_image_path_res_entries[n].path = path;
+    s_image_path_res_entries[n].resource = &s_image_cache.resources[n];
+    s_image_cache.count++;
+    return s_image_path_res_entries[n].resource;
 }
 
-void r_draw_image(UI_Rect rect, int image_id) 
+void r_draw_image(UI_Rect rect, const char* path) 
 {
-    if (image_id < 0 || image_id >= s_image_cache.count) return;
-    
-    ImageResource* img = &s_image_cache.resources[image_id];
+    ImageResource* img = 0;
+    for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
+    {
+        if (s_image_path_res_entries[i].path == path)
+        {
+            img = s_image_path_res_entries[i].resource;
+        }
+    }
+    if (!img)
+        img = r_load_image(path);
 
     // calculate aspect ratio preserved dimensions
     float img_ratio = (float)img->width / img->height;
@@ -864,7 +885,7 @@ void r_draw_image(UI_Rect rect, int image_id)
 
     // set image texture
     push_rect(dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
-    flush(s_image_cache.resources[image_id].view);
+    flush(img->view);
 }
 
 void r_present()

@@ -72,7 +72,7 @@ typedef struct { UI_BaseCommand base; void *dst; } UI_JumpCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; } UI_ClipCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
 typedef struct { UI_BaseCommand base; UI_Vec2 pos; UI_Color color; wchar_t str[1]; } UI_TextCommand;
-typedef struct { UI_BaseCommand base; UI_Rect rect; int image_id; } UI_ImageCommand;
+typedef struct { UI_BaseCommand base; UI_Rect rect; const char* path; } UI_ImageCommand;
 
 typedef union {
     int type;
@@ -162,7 +162,7 @@ void ui_end_window(UI_Context* ctx);
 
 void ui_layout_row(UI_Context* ctx, int items, int height);
 void ui_label(UI_Context* ctx, const wchar_t* text);
-void ui_image(UI_Context* ctx, int image_id);
+void ui_image(UI_Context* ctx, const char* path);
 
 void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);
