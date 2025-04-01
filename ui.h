@@ -152,6 +152,10 @@ struct UI_Context {
 
 ///
 
+UI_Rect unclipped_rect;
+
+///
+
 UI_Vec2 ui_vec2(int x, int y);
 UI_Rect ui_rect(int x, int y, int w, int h);
 UI_Color ui_color(int r, int g, int b, int a);

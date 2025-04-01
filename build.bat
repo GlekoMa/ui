@@ -58,7 +58,8 @@ if "%Compiler%"=="clang-cl" (
     set CommonCompilerFlags=/nologo /W3 /WX
 )
 
-set CompilerDebugFlags=/Od /Zi /RTC1 /fsanitize=address
+:: set CompilerDebugFlags=/Od /Zi /RTC1 /fsanitize=address
+set CompilerDebugFlags=/Od /Zi /RTC1
 set CompilerReleaseFlags= /O2 /DNDEBUG
 
 if %IsRelease%==1 (

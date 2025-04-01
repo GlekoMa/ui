@@ -691,6 +691,10 @@ void r_init()
     IDXGISwapChain1_GetBuffer(s_r_state.swapchain, 0, &IID_ID3D11Texture2D, (void**)&texture);
     ID3D11Device_CreateRenderTargetView(s_r_state.device, (ID3D11Resource*)texture, NULL, &s_r_state.rtview);
     ID3D11Texture2D_Release(texture);
+
+    // If we don't set clipping, and there are no subsequent controls 
+    // to set clipping either, D3D11 will render nothing
+    r_set_clip_rect(unclipped_rect);
 }
 
 void r_clear(UI_Color color)

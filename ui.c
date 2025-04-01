@@ -35,7 +35,7 @@ static UI_Style default_style = {
     }
 };
 
-static UI_Rect unclipped_rect = { 0, 0, 0x1000000, 0x1000000 };
+UI_Rect unclipped_rect = { 0, 0, 0x1000000, 0x1000000 };
 
 UI_Vec2 ui_vec2(int x, int y)
 {
