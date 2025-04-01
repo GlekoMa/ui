@@ -520,7 +520,6 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
     ctx->layout.body.x -= cnt->scroll.x;
     ctx->layout.body.y -= cnt->scroll.y;
     ui_push_clip_rect(ctx, cnt->body);
-    ui_update_control(ctx, id, cnt->rect, false);
 }
 
 void ui_end_window(UI_Context* ctx)
