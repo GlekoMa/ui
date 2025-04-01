@@ -112,9 +112,9 @@ static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
 
 static void ui_set_clip(UI_Context* ctx, UI_Rect rect) 
 {
-  UI_Command* cmd;
-  cmd = ui_push_command(ctx, UI_COMMAND_CLIP, sizeof(UI_ClipCommand));
-  cmd->clip.rect = rect;
+    UI_Command* cmd;
+    cmd = ui_push_command(ctx, UI_COMMAND_CLIP, sizeof(UI_ClipCommand));
+    cmd->clip.rect = rect;
 }
 
 //
