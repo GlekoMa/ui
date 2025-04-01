@@ -790,6 +790,8 @@ int r_get_text_height(void)
 
 void r_set_clip_rect(UI_Rect rect) 
 {
+    // TODO: Because of this flush, the memory usage will grow to huge (e.g 15MB => 35~80MB).
+    //       The key reason is `map_vertex_index_buffer`.
     flush(NULL);
     D3D11_RECT scissor_rect = {
         .left = rect.x,
