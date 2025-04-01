@@ -457,20 +457,21 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
         base = b;
         base.x = b.x + b.w;
         base.w = sz;
-        // handle input
-        ui_update_control(ctx, id, base, true);
-        if (ctx->focus == id && ctx->mouse_held)
-        {
-            cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
-        }
-        // clamp scroll to limits
-        cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
         // draw base and thumb
         ctx->draw_frame(ctx, base, UI_COLOR_SCROLLBASE);
         thumb = base;
         thumb.h = ui_max(ctx->style->thumb_size, base.h * b.h / cs.y); // a*(b/c)
         thumb.y += cnt->scroll.y * (base.h - thumb.h) / maxscroll; // (a/c)*b
         ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
+
+        // handle input
+        ui_update_control(ctx, id, thumb, true);
+        if (ctx->focus == id && ctx->mouse_held)
+        {
+            cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
+        }
+        // clamp scroll to limits
+        cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
 
         // set this as the scroll_target (will get scrolled on mousewheel)
         // if the mouse is over it
@@ -667,6 +668,10 @@ void ui_end(UI_Context* ctx)
     {
         ctx->scroll_target->scroll.x += ctx->scroll_delta.x;
         ctx->scroll_target->scroll.y += ctx->scroll_delta.y;
+        // clamp scroll to limits
+        UI_Container* cnt = ctx->scroll_target;
+        int maxscroll = (cnt->content_size.y + ctx->style->padding * 2) - cnt->body.h;
+        cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
     }
 
     // unset focus if focus id was not touched this frame
