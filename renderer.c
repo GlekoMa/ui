@@ -858,6 +858,7 @@ static ImageResource* r_load_image(const char* path)
 
 void r_draw_image(UI_Rect rect, const char* path) 
 {
+    flush(NULL);
     ImageResource* img = 0;
     for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
     {
