@@ -718,6 +718,13 @@ void r_clear(UI_Color color)
             r_draw_rect(dot, dot_color);
         }
     }
+
+    // draw border
+    UI_Color border_color = ui_color(0, 0, 255, 255);
+    r_draw_rect(ui_rect(client_rect.x + 1, client_rect.y, client_rect.w - 2, 1), border_color);
+    r_draw_rect(ui_rect(client_rect.x + 1, client_rect.y + client_rect.h - 1, client_rect.w - 2, 1), border_color);
+    r_draw_rect(ui_rect(client_rect.x, client_rect.y, 1, client_rect.h), border_color);
+    r_draw_rect(ui_rect(client_rect.x + client_rect.w - 1, client_rect.y, 1, client_rect.h), border_color);
 }
 
 void r_draw_rect(UI_Rect rect, UI_Color color)
