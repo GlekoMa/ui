@@ -36,6 +36,8 @@ enum {
     UI_COLOR_TITLETEXT,
     UI_COLOR_TITLEBG,
     UI_COLOR_BORDER,
+    UI_COLOR_BORDER_LCLICK,
+    UI_COLOR_BORDER_RCLICK,
     UI_COLOR_WINDOWBG,
     UI_COLOR_SCROLLBASE,
     UI_COLOR_SCROLLTHUMB,
@@ -123,10 +125,12 @@ struct UI_Context {
     // core state
     UI_Style* style;
     UI_Id hover;
-    UI_Id focus;
+    UI_Id lclicked;
+    UI_Id rclicked;
     UI_Id last_id;
     int last_zindex;
-    bool updated_focus;
+    bool updated_lclicked;
+    bool updated_rclicked;
     int frame;
     UI_Container* hover_root;
     UI_Container* next_hover_root;
@@ -147,7 +151,8 @@ struct UI_Context {
     UI_Vec2 mouse_delta;
     UI_Vec2 scroll_delta;
     bool mouse_held;
-    bool mouse_click;
+    bool mouse_lclick;
+    bool mouse_rclick;
 };
 
 ///

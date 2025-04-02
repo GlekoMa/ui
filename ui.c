@@ -29,6 +29,8 @@ static UI_Style default_style = {
         { 18,  18,  18,  255 }, // UI_COLOR_TITLETEXT
         { 238, 238, 238, 255 }, // UI_COLOR_TITLEBG
         { 206, 206, 206, 255 }, // UI_COLOR_BORDER
+        { 10,  210, 20,  255 }, // UI_COLOR_BORDER_LCLICK
+        { 190, 130, 0,   255 }, // UI_COLOR_BORDER_RCLICK
         { 250, 250, 250, 255 }, // UI_COLOR_WINDOWBG
         { 254, 254, 254, 255 }, // UI_COLOR_SCROLLBASE
         { 218, 219, 222, 255 }  // UI_COLOR_SCROLLTHUMB
@@ -194,10 +196,16 @@ static int ui_mouse_over(UI_Context* ctx, UI_Rect rect)
            in_hover_root(ctx);
 }
 
-static void ui_set_focus(UI_Context* ctx, UI_Id id)
+static void ui_set_lclicked(UI_Context* ctx, UI_Id id)
 {
-    ctx->focus = id;
-    ctx->updated_focus = true;
+    ctx->lclicked = id;
+    ctx->updated_lclicked = true;
+}
+
+static void ui_set_rclicked(UI_Context* ctx, UI_Id id)
+{
+    ctx->rclicked = id;
+    ctx->updated_rclicked = true;
 }
 
 static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
@@ -211,17 +219,31 @@ static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
             ctx->hover = id;
         }
     }
-    if (ctx->focus == id)
+
+    // handle clicked
+    if (ctx->lclicked == id)
     {
-        ctx->updated_focus = true;
-        if (ctx->mouse_click && !mouseover) { ui_set_focus(ctx, 0); }
-        if (!ctx->mouse_held) { ui_set_focus(ctx, 0); }
+        ctx->updated_lclicked = true;
+        if (ctx->mouse_lclick && !mouseover) { ui_set_lclicked(ctx, 0); }
+        if (!ctx->mouse_held) { ui_set_lclicked(ctx, 0); }
     }
+    else if (ctx->rclicked == id)
+    {
+        ctx->updated_rclicked = true;
+        if (ctx->mouse_rclick && !mouseover) { ui_set_rclicked(ctx, 0); }
+        if (!ctx->mouse_held) { ui_set_rclicked(ctx, 0); }
+    }
+
+    // handle hover
     if (ctx->hover == id)
     {
-        if (ctx->mouse_click)
+        if (ctx->mouse_lclick)
         {
-            ui_set_focus(ctx, id);
+            ui_set_lclicked(ctx, id);
+        }
+        else if (ctx->mouse_rclick)
+        {
+            ui_set_rclicked(ctx, id);
         }
         else if (!mouseover)
         {
@@ -463,7 +485,7 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
 
         // handle input
         ui_update_control(ctx, id, thumb);
-        if (ctx->focus == id && ctx->mouse_held)
+        if (ctx->lclicked == id && ctx->mouse_held)
         {
             cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
         }
@@ -500,7 +522,7 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
         UI_Id id = ui_get_id(ctx, "!title", 6);
         ui_update_control(ctx, id, tr);
         ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
-        if (id == ctx->focus && ctx->mouse_held)
+        if (id == ctx->lclicked && ctx->mouse_held)
         {
             cnt->rect.x += ctx->mouse_delta.x;
             cnt->rect.y += ctx->mouse_delta.y;
@@ -618,10 +640,29 @@ void ui_label(UI_Context* ctx, const wchar_t* text)
     ui_draw_control_text(ctx, text, rect, UI_COLOR_TEXT);
 }
 
+static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
+{
+    UI_Rect box_rect = expand_rect(rect, 1);
+    // check if needs to be clipped
+    int clipped = ui_check_clip(ctx, box_rect);
+    if (clipped == UI_CLIP_ALL) { return; }
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
+    ui_draw_box(ctx, expand_rect(box_rect, 1), color);
+    // reset clipping if it was set
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+}
+
 void ui_image(UI_Context* ctx, const char* path)
 {
     UI_Rect rect = ui_layout_next(ctx);
     ui_draw_image(ctx, rect, path);
+
+    UI_Id id = ui_get_id(ctx, path, (int)strlen(path));
+    ui_update_control(ctx, id, rect);
+    if (id == ctx->hover)
+    {
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER]);
+    }
 }
 
 //
@@ -671,12 +712,14 @@ void ui_end(UI_Context* ctx)
         cnt->scroll.y = ui_clamp(cnt->scroll.y, 0, maxscroll);
     }
 
-    // unset focus if focus id was not touched this frame
-    if (!ctx->updated_focus) { ctx->focus = 0; }
-    ctx->updated_focus = false;
+    // unset clicked if clicked id was not touched this frame
+    if (!ctx->updated_lclicked) { ctx->lclicked = 0; }
+    ctx->updated_lclicked = false;
+    if (!ctx->updated_rclicked) { ctx->rclicked = 0; }
+    ctx->updated_rclicked = false;
     
     // bring hover root to front if mouse was pressed
-    if (ctx->mouse_click && 
+    if (ctx->mouse_lclick && 
         ctx->next_hover_root &&
         ctx->next_hover_root->zindex < ctx->last_zindex)
     {
@@ -684,7 +727,8 @@ void ui_end(UI_Context* ctx)
     }
 
     /* reset input state */
-    ctx->mouse_click = false;
+    ctx->mouse_lclick = false;
+    ctx->mouse_rclick = false;
     ctx->scroll_delta = ui_vec2(0, 0);
     ctx->last_mouse_pos = ctx->mouse_pos;
 

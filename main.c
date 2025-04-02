@@ -49,7 +49,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_ctx->mouse_pos.y = HIWORD(lparam);
 
             // Handle window dragging
-            if (g_ctx->mouse_held && !g_ctx->focus) 
+            if (g_ctx->mouse_held && !g_ctx->lclicked) 
             {
                 POINT cursor_pos;
                 GetCursorPos(&cursor_pos);
@@ -68,12 +68,15 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             return 0;
         case WM_LBUTTONDOWN:
             g_ctx->mouse_held = true;
-            g_ctx->mouse_click = true;
+            g_ctx->mouse_lclick = true;
             GetCursorPos(&s_drag_start_pos);
             SetCapture(window);
             return 0;
         case WM_LBUTTONUP:
             g_ctx->mouse_held = false;
+            return 0;
+        case WM_RBUTTONDOWN:
+            g_ctx->mouse_rclick = true;
             return 0;
         case WM_MOUSEWHEEL:
             short delta = GET_WHEEL_DELTA_WPARAM(wparam);
