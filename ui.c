@@ -1,4 +1,3 @@
-#define _AMD64_
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,7 +66,7 @@ static void ui_draw_widget_text(UI_Context* ctx, const wchar_t* str, UI_Rect rec
 
 //
 // commandlist
-// 
+//
 
 static UI_Command* ui_push_command(UI_Context* ctx, int type, int size)
 {
@@ -90,21 +89,21 @@ int ui_next_command(UI_Context* ctx, UI_Command** cmd)
         *cmd = (UI_Command*)ctx->command_list.items;
     }
 
-    while ((char*) *cmd != ctx->command_list.items + ctx->command_list.idx) 
+    while ((char*) *cmd != ctx->command_list.items + ctx->command_list.idx)
     {
-        if ((*cmd)->type == UI_COMMAND_JUMP) 
-        { 
-            *cmd = (*cmd)->jump.dst;
-        } 
-        else 
+        if ((*cmd)->type == UI_COMMAND_JUMP)
         {
-            return 1; 
+            *cmd = (*cmd)->jump.dst;
+        }
+        else
+        {
+            return 1;
         }
     }
     return 0;
 }
 
-static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst) 
+static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
 {
     UI_Command *cmd;
     cmd = ui_push_command(ctx, UI_COMMAND_JUMP, sizeof(UI_JumpCommand));
@@ -112,7 +111,7 @@ static UI_Command* push_jump(UI_Context *ctx, UI_Command *dst)
     return cmd;
 }
 
-static void ui_set_clip(UI_Context* ctx, UI_Rect rect) 
+static void ui_set_clip(UI_Context* ctx, UI_Rect rect)
 {
     UI_Command* cmd;
     cmd = ui_push_command(ctx, UI_COMMAND_CLIP, sizeof(UI_ClipCommand));
@@ -123,7 +122,7 @@ static void ui_set_clip(UI_Context* ctx, UI_Rect rect)
 // clip stack
 //
 
-static UI_Rect intersect_rects(UI_Rect r1, UI_Rect r2) 
+static UI_Rect intersect_rects(UI_Rect r1, UI_Rect r2)
 {
     int x1 = ui_max(r1.x, r2.x);
     int y1 = ui_max(r1.y, r2.y);
@@ -143,7 +142,7 @@ static UI_Rect ui_get_clip_rect(UI_Context* ctx)
     return ctx->clip_stack.items[ctx->clip_stack.idx - 1];
 }
 
-static void ui_pop_clip_rect(UI_Context *ctx) 
+static void ui_pop_clip_rect(UI_Context *ctx)
 {
     pop(ctx->clip_stack);
 }
@@ -155,7 +154,7 @@ static void ui_push_clip_rect(UI_Context* ctx, UI_Rect rect)
     push(ctx->clip_stack, inter);
 }
 
-static int ui_check_clip(UI_Context* ctx, UI_Rect r) 
+static int ui_check_clip(UI_Context* ctx, UI_Rect r)
 {
     UI_Rect cr = ui_get_clip_rect(ctx);
     if (r.x > cr.x + cr.w || r.x + r.w < cr.x ||
@@ -191,7 +190,7 @@ static bool rect_overlaps_vec2(UI_Rect r, UI_Vec2 p)
 
 static int ui_mouse_over(UI_Context* ctx, UI_Rect rect)
 {
-    return rect_overlaps_vec2(rect, ctx->mouse_pos) && 
+    return rect_overlaps_vec2(rect, ctx->mouse_pos) &&
            rect_overlaps_vec2(ui_get_clip_rect(ctx), ctx->mouse_pos) &&
            in_hover_root(ctx);
 }
@@ -324,7 +323,7 @@ static int ui_pool_get(UI_PoolItem* items, int len, UI_Id id)
     return -1;
 }
 
-// 
+//
 // layout
 //
 
@@ -352,7 +351,7 @@ static UI_Rect ui_layout_next(UI_Context* ctx)
     UI_Rect    res;
 
     // handle next row
-    if (layout->item_index == layout->items) 
+    if (layout->item_index == layout->items)
         ui_layout_row(ctx, layout->items, layout->size.y);
 
     // get res
@@ -741,9 +740,9 @@ void ui_end(UI_Context* ctx)
     ctx->updated_lclicked = false;
     if (!ctx->updated_rclicked) { ctx->rclicked = 0; }
     ctx->updated_rclicked = false;
-    
+
     // bring hover root to front if mouse was pressed
-    if (ctx->mouse_lclick && 
+    if (ctx->mouse_lclick &&
         ctx->next_hover_root &&
         ctx->next_hover_root->zindex < ctx->last_zindex)
     {

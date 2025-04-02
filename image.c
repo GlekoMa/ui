@@ -10,25 +10,23 @@
     } while (0)
 #define assert_hr(hr) assert(SUCCEEDED(hr))
 
-IWICImagingFactory* s_factory = NULL;
-
-void image_init()
+void image_init(IWICImagingFactory** factory)
 {
     HRESULT hr;
     hr = CoInitialize(NULL);
     assert_hr(hr);
     hr = CoCreateInstance(&CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, &IID_IWICImagingFactory,
-                          (void**)&s_factory);
+                          (void**)factory);
     assert_hr(hr);
 }
 
-void image_clean()
+void image_clean(IWICImagingFactory* factory)
 {
-    IWICImagingFactory_Release(s_factory);
+    IWICImagingFactory_Release(factory);
     CoUninitialize();
 }
 
-unsigned char* image_load(const char* filename, unsigned* width, unsigned* height)
+unsigned char* image_load(IWICImagingFactory* factory, const char* filename, unsigned* width, unsigned* height)
 {
     // convert filename from char to wchar_t
     int filename_len = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
@@ -37,7 +35,7 @@ unsigned char* image_load(const char* filename, unsigned* width, unsigned* heigh
 
     IWICBitmapDecoder* decoder = NULL;
     HRESULT hr;
-    hr = IWICImagingFactory_CreateDecoderFromFilename(s_factory, filename_w, NULL, GENERIC_READ,
+    hr = IWICImagingFactory_CreateDecoderFromFilename(factory, filename_w, NULL, GENERIC_READ,
                                                       WICDecodeMetadataCacheOnDemand, &decoder);
     if (SUCCEEDED(hr))
     {
@@ -46,7 +44,7 @@ unsigned char* image_load(const char* filename, unsigned* width, unsigned* heigh
         if (SUCCEEDED(hr))
         {
             IWICFormatConverter* converter = NULL;
-            hr = IWICImagingFactory_CreateFormatConverter(s_factory, &converter);
+            hr = IWICImagingFactory_CreateFormatConverter(factory, &converter);
             if (SUCCEEDED(hr))
             {
                 hr = IWICFormatConverter_Initialize(converter, (IWICBitmapSource*)frame, &GUID_WICPixelFormat32bppRGBA,

@@ -8,94 +8,18 @@
 #define COBJMACROS
 #include <windows.h>
 #include <shlwapi.h>
-#include <d3d11.h>
-#include <dxgi1_3.h>
-#include <d3dcompiler.h>
-#include <dxgidebug.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "renderer.h"
 #include "ui.h"
-#include "image.h"
-
-
-#define BUFFER_SIZE 16384
-// atlas
-#define NUM_CHARS_SYMBOL 4
-#define NUM_CHARS_ASCII 95
-#define NUM_CHARS_ZH 3522
-#define NUM_CHARS NUM_CHARS_SYMBOL + NUM_CHARS_ASCII + NUM_CHARS_ZH + 1 // 1 is 3x3 white square
-// image
-#define MAX_IMAGE_PATH_RES_ENTRIES 128
+#include "renderer.h"
 
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
-
-
-typedef struct {
-    ID3D11Device*             device;
-    ID3D11DeviceContext*      context;
-    IDXGISwapChain1*          swapchain;
-    ID3D11SamplerState*       sampler_state;
-    ID3D11ShaderResourceView* texture_view;
-    ID3D11Buffer*             vbuffer;
-    ID3D11Buffer*             ibuffer;
-    ID3D11Buffer*             cbuffer;
-    ID3D11BlendState*         blend_state;
-    ID3D11RasterizerState*    raster_state;
-    ID3D11InputLayout*        layout;
-    ID3D11VertexShader*       vshader;
-    ID3D11PixelShader*        pshader;
-    ID3D11RenderTargetView*   rtview;
-    ID3D11Texture2D*          texture;
-} RendererState;
-
-typedef struct {
-    float pos[2];
-    float uv[2];
-    unsigned char col[4];
-    int tex_index; // 0: font atlas texture | 1: image texture
-} Vertex;
-
-typedef struct {
-    int codepoint;
-    UI_Rect src;
-    int xoff, yoff, xadvance;
-} Atlas;
-
-// store loaded images
-typedef struct {
-    ID3D11ShaderResourceView* view;
-    int width;
-    int height;
-} ImageResource;
-
-typedef struct {
-    ImageResource* resources;
-    int capacity;
-    int count;
-} ImageCache;
-
-// map image path to image resource
-typedef struct {
-    const char* path;
-    ImageResource* resource;
-} PathResEntry;
-
-
-static Vertex s_vert_data[BUFFER_SIZE * 4];
-static unsigned s_index_data[BUFFER_SIZE * 6];
-static int s_buf_idx = 0;
-static RendererState s_r_state;
-static Atlas s_atlas[NUM_CHARS];
-static ImageCache s_image_cache;
-static PathResEntry s_image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
-
 
 //
 // Atlas save helper
 //
 
-void get_fixed_dir_from_appdata(const char* dir_name, char* fixed_dir)
+static void get_fixed_dir_from_appdata(RendererState* r_state, const char* dir_name, char* fixed_dir)
 {
     char appdata[MAX_PATH];
     GetEnvironmentVariableA("APPDATA", appdata, sizeof(appdata));
@@ -105,15 +29,15 @@ void get_fixed_dir_from_appdata(const char* dir_name, char* fixed_dir)
     strcat(fixed_dir, fixed_dir_suffix);
 }
 
-void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
+static void save_atlas_cache(RendererState* r_state, const char* fixed_dir, const unsigned char* temp_bitmap)
 {
     // For development: Recursively delete the target directory if it exists
-    if (PathFileExistsA(fixed_dir)) 
+    if (PathFileExistsA(fixed_dir))
     {
         char del_path[MAX_PATH + 2]; // +2 for double null termination
         strcpy(del_path, fixed_dir);
         del_path[strlen(fixed_dir) + 1] = 0; // double null terminate
-        
+
         SHFILEOPSTRUCTA file_op = {
             NULL,
             FO_DELETE,
@@ -141,11 +65,11 @@ void save_atlas_cache(const char* fixed_dir, const unsigned char* temp_bitmap)
     char fixed_atlas_dat_path[MAX_PATH];
     sprintf(fixed_atlas_dat_path, "%s\\atlas.dat", fixed_dir);
     FILE* fp = fopen(fixed_atlas_dat_path, "wb");
-    fwrite(s_atlas, sizeof(Atlas), NUM_CHARS, fp);
+    fwrite(r_state->atlas, sizeof(Atlas), NUM_CHARS, fp);
     fclose(fp);
 }
 
-void load_atlas_cache(const char* fixed_dir, unsigned char* temp_bitmap) 
+static void load_atlas_cache(RendererState* r_state, const char* fixed_dir, unsigned char* temp_bitmap)
 {
     // Load raw
     char fixed_atlas_raw_path[MAX_PATH];
@@ -153,12 +77,12 @@ void load_atlas_cache(const char* fixed_dir, unsigned char* temp_bitmap)
     FILE* fp_raw = fopen(fixed_atlas_raw_path, "rb");
     fread(temp_bitmap, 1, ATLAS_WIDTH * ATLAS_HEIGHT, fp_raw);
     fclose(fp_raw);
-    
+
     // Load dat
     char fixed_atlas_dat_path[MAX_PATH];
     sprintf(fixed_atlas_dat_path, "%s\\atlas.dat", fixed_dir);
     FILE* fp = fopen(fixed_atlas_dat_path, "rb");
-    fread(s_atlas, sizeof(Atlas), NUM_CHARS, fp);
+    fread(r_state->atlas, sizeof(Atlas), NUM_CHARS, fp);
     fclose(fp);
 }
 
@@ -215,31 +139,31 @@ static void map_mvp_to_cbuffer(ID3D11DeviceContext* context, ID3D11Buffer* cbuff
     ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)cbuffer, 0);
 }
 
-static void map_vertex_index_buffer(ID3D11DeviceContext* context, ID3D11Buffer* vbuffer, ID3D11Buffer* ibuffer,
+static void map_vertex_index_buffer(RendererState* r_state, ID3D11DeviceContext* context, ID3D11Buffer* vbuffer, ID3D11Buffer* ibuffer,
                                     int client_width, int client_height)
 {
     // map: Update vertex buffer
     D3D11_MAPPED_SUBRESOURCE mapped_vert;
     ID3D11DeviceContext_Map(context, (ID3D11Resource*)vbuffer, 0, D3D11_MAP_WRITE_DISCARD, 0,
                             &mapped_vert);
-    memcpy(mapped_vert.pData, s_vert_data, sizeof(Vertex) * 4 * (s_buf_idx));
+    memcpy(mapped_vert.pData, r_state->vert_data, sizeof(Vertex) * 4 * (r_state->buf_idx));
     ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)vbuffer, 0);
 
     // map: Update index buffer
     D3D11_MAPPED_SUBRESOURCE mapped_index;
     ID3D11DeviceContext_Map(context, (ID3D11Resource*)ibuffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_index);
-    memcpy(mapped_index.pData, s_index_data, sizeof(unsigned) * 6 * (s_buf_idx));
+    memcpy(mapped_index.pData, r_state->index_data, sizeof(unsigned) * 6 * (r_state->buf_idx));
     ID3D11DeviceContext_Unmap(context, (ID3D11Resource*)ibuffer, 0);
 }
 
-static void get_atlas(unsigned char* temp_bitmap)
+static void get_atlas(RendererState* r_state, unsigned char* temp_bitmap)
 {
     // If atlas cache exists, *early return*
     char fixed_dir[MAX_PATH];
-    get_fixed_dir_from_appdata("ui", fixed_dir);
+    get_fixed_dir_from_appdata(r_state, "ui", fixed_dir);
     if (PathFileExistsA(fixed_dir))
     {
-        load_atlas_cache(fixed_dir, temp_bitmap);
+        load_atlas_cache(r_state, fixed_dir, temp_bitmap);
         return;
     }
 
@@ -250,7 +174,7 @@ static void get_atlas(unsigned char* temp_bitmap)
         -19785,8029,4,1,3,1,9,4059,1,6,1,1,1,5,1,7663,1,2,4,1,1,1,1,2,1,2,1,2,1,2,2,1,1,1,1,1,5,2,1,2,3,3,3,2,2,4,1,1,1,2,1,5,2,3,1,2,1,1,1,1,
         1,2,1,1,2,2,1,4,1,1,1,1,5,10,1,2,11,8,2,1,2,1,2,1,2,1,2,1,5,1,6,3,1,1,1,2,2,1,1,1,4,8,5,1,1,4,1,1,3,1,2,1,3,2,1,2,1,1,1,10,
         1,1,5,2,4,2,4,1,4,2,2,2,9,3,2,1,1,6,1,1,1,4,1,1,4,2,4,5,1,4,2,2,2,2,7,3,7,1,1,2,2,2,4,2,1,4,3,6,10,12,5,4,3,2,14,2,3,3,2,1,
-        1,1,6,1,6,10,4,1,6,5,1,7,1,5,4,8,4,1,1,2,9,19,5,2,4,1,1,5,2,5,20,2,2,9,7,1,11,2,9,17,1,8,1,5,8,27,4,6,9,20,11,13,14,6,23,15,30,2,2,1, 
+        1,1,6,1,6,10,4,1,6,5,1,7,1,5,4,8,4,1,1,2,9,19,5,2,4,1,1,5,2,5,20,2,2,9,7,1,11,2,9,17,1,8,1,5,8,27,4,6,9,20,11,13,14,6,23,15,30,2,2,1,
         1,1,2,1,2,2,4,3,6,2,6,3,3,3,1,1,3,1,2,1,1,1,1,1,3,1,1,3,5,3,4,1,5,3,2,2,2,1,4,4,8,3,1,2,1,2,1,1,4,5,4,2,3,3,3,2,10,2,3,1,
         3,7,2,2,1,3,3,2,1,1,1,2,2,1,1,2,3,1,3,7,1,5,1,1,1,1,2,3,4,4,1,2,3,2,6,1,1,1,1,1,2,5,1,7,3,4,3,2,15,2,2,1,5,3,13,9,19,2,1,1,
         1,1,2,5,1,1,1,6,1,1,12,4,4,2,2,7,6,7,5,22,4,1,1,5,1,2,13,1,1,2,7,3,7,15,1,1,3,1,2,2,4,1,2,4,1,2,1,1,2,1,1,3,2,4,1,1,2,2,1,4,
@@ -319,9 +243,9 @@ static void get_atlas(unsigned char* temp_bitmap)
         codepoints_zh[i] += 0x4E00 + offset;
     };
 
-    for (int i = 0; i < NUM_CHARS_SYMBOL; i++) { s_atlas[i+1].codepoint = codepoints_symbol[i]; }
-    for (int i = 0; i < NUM_CHARS_ASCII; i++) { s_atlas[i+1+NUM_CHARS_SYMBOL].codepoint = codepoints_ascii[i]; }
-    for (int i = 0; i < NUM_CHARS_ZH; i++) { s_atlas[i+1+NUM_CHARS_SYMBOL+NUM_CHARS_ASCII].codepoint = codepoints_zh[i]; }
+    for (int i = 0; i < NUM_CHARS_SYMBOL; i++) { r_state->atlas[i+1].codepoint = codepoints_symbol[i]; }
+    for (int i = 0; i < NUM_CHARS_ASCII; i++) { r_state->atlas[i+1+NUM_CHARS_SYMBOL].codepoint = codepoints_ascii[i]; }
+    for (int i = 0; i < NUM_CHARS_ZH; i++) { r_state->atlas[i+1+NUM_CHARS_SYMBOL+NUM_CHARS_ASCII].codepoint = codepoints_zh[i]; }
 
     // Get atlas other properties & Fill bitmap
     {
@@ -395,13 +319,13 @@ static void get_atlas(unsigned char* temp_bitmap)
         // Convert cdata to atlas
         for (int i = 0; i < NUM_CHARS - 1; i++)
         {
-            s_atlas[i+1].src.x = cdata[i].x0;
-            s_atlas[i+1].src.y = cdata[i].y0;
-            s_atlas[i+1].src.w = cdata[i].x1 - cdata[i].x0;
-            s_atlas[i+1].src.h = cdata[i].y1 - cdata[i].y0;
-            s_atlas[i+1].xoff = (int)cdata[i].xoff;
-            s_atlas[i+1].yoff = (int)cdata[i].yoff;
-            s_atlas[i+1].xadvance = (int)cdata[i].xadvance;
+            r_state->atlas[i+1].src.x = cdata[i].x0;
+            r_state->atlas[i+1].src.y = cdata[i].y0;
+            r_state->atlas[i+1].src.w = cdata[i].x1 - cdata[i].x0;
+            r_state->atlas[i+1].src.h = cdata[i].y1 - cdata[i].y0;
+            r_state->atlas[i+1].xoff = (int)cdata[i].xoff;
+            r_state->atlas[i+1].yoff = (int)cdata[i].yoff;
+            r_state->atlas[i+1].xadvance = (int)cdata[i].xadvance;
         }
 
         // Add a special 3x3 white square at the right-bottom corner of the bitmap as ATLAS_WHITE
@@ -409,82 +333,82 @@ static void get_atlas(unsigned char* temp_bitmap)
             int white_box_size = 3;
             int white_box_x = ATLAS_WIDTH - white_box_size;
             int white_box_y = ATLAS_HEIGHT - white_box_size;
-            for (int y = 0; y < white_box_size; y++) 
+            for (int y = 0; y < white_box_size; y++)
             {
-                for (int x = 0; x < white_box_size; x++) 
+                for (int x = 0; x < white_box_size; x++)
                 {
                     temp_bitmap[(white_box_y + y) * ATLAS_WIDTH + (white_box_x + x)] = 255;
                 }
             }
-            s_atlas[0].src.x = white_box_x;
-            s_atlas[0].src.y = white_box_y;
-            s_atlas[0].src.w = white_box_size;
-            s_atlas[0].src.h = white_box_size;
-            s_atlas[0].xoff = 0;
-            s_atlas[0].yoff = 0;
-            s_atlas[0].xadvance = white_box_size;
+            r_state->atlas[0].src.x = white_box_x;
+            r_state->atlas[0].src.y = white_box_y;
+            r_state->atlas[0].src.w = white_box_size;
+            r_state->atlas[0].src.h = white_box_size;
+            r_state->atlas[0].xoff = 0;
+            r_state->atlas[0].yoff = 0;
+            r_state->atlas[0].xadvance = white_box_size;
         }
     }
-    save_atlas_cache(fixed_dir, temp_bitmap);
+    save_atlas_cache(r_state, fixed_dir, temp_bitmap);
 }
 
 //
 // Renderer
 //
 
-static void flush(ID3D11ShaderResourceView* texture_view)
+static void flush(RendererState* r_state, ID3D11ShaderResourceView* texture_view)
 {
     // Map vertex & index buffer
-    map_vertex_index_buffer(s_r_state.context, s_r_state.vbuffer, s_r_state.ibuffer, g_client_width, g_client_height);
+    map_vertex_index_buffer(r_state, r_state->context, r_state->vbuffer, r_state->ibuffer, r_state->client_width, r_state->client_height);
 
     // Setup orthographic projection matrix into constant buffer
-    map_mvp_to_cbuffer(s_r_state.context, s_r_state.cbuffer, g_client_width, g_client_height);
+    map_mvp_to_cbuffer(r_state->context, r_state->cbuffer, r_state->client_width, r_state->client_height);
 
     // Set viewport
-    D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)g_client_width, (FLOAT)g_client_height, 0, 1 };
+    D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)r_state->client_width, (FLOAT)r_state->client_height, 0, 1 };
 
     // IA-VS-RS-PS-OM, Draw, Present!
     unsigned stride = sizeof(Vertex);
     unsigned offset = 0;
-    ID3D11DeviceContext_IASetInputLayout(s_r_state.context, s_r_state.layout); // IA: Input Assembly
-    ID3D11DeviceContext_IASetPrimitiveTopology(s_r_state.context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_IASetVertexBuffers(s_r_state.context, 0, 1, &s_r_state.vbuffer, &stride, &offset);
-    ID3D11DeviceContext_IASetIndexBuffer(s_r_state.context, s_r_state.ibuffer, DXGI_FORMAT_R32_UINT, 0);
-    ID3D11DeviceContext_VSSetConstantBuffers(s_r_state.context, 0, 1, &s_r_state.cbuffer);
-    ID3D11DeviceContext_VSSetShader(s_r_state.context, s_r_state.vshader, NULL, 0); // VS: Vertex Shader
-    ID3D11DeviceContext_RSSetViewports(s_r_state.context, 1, &viewport); // RS: Rasterizer Stage
-    ID3D11DeviceContext_RSSetState(s_r_state.context, s_r_state.raster_state);
-    ID3D11DeviceContext_PSSetShader(s_r_state.context, s_r_state.pshader, NULL, 0); // PS: Pixel Shader
+    ID3D11DeviceContext_IASetInputLayout(r_state->context, r_state->layout); // IA: Input Assembly
+    ID3D11DeviceContext_IASetPrimitiveTopology(r_state->context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    ID3D11DeviceContext_IASetVertexBuffers(r_state->context, 0, 1, &r_state->vbuffer, &stride, &offset);
+    ID3D11DeviceContext_IASetIndexBuffer(r_state->context, r_state->ibuffer, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11DeviceContext_VSSetConstantBuffers(r_state->context, 0, 1, &r_state->cbuffer);
+    ID3D11DeviceContext_VSSetShader(r_state->context, r_state->vshader, NULL, 0); // VS: Vertex Shader
+    ID3D11DeviceContext_RSSetViewports(r_state->context, 1, &viewport); // RS: Rasterizer Stage
+    ID3D11DeviceContext_RSSetState(r_state->context, r_state->raster_state);
+    ID3D11DeviceContext_PSSetShader(r_state->context, r_state->pshader, NULL, 0); // PS: Pixel Shader
     if (!texture_view)
-        ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &s_r_state.texture_view);
+        ID3D11DeviceContext_PSSetShaderResources(r_state->context, 0, 1, &r_state->texture_view);
     else
-        ID3D11DeviceContext_PSSetShaderResources(s_r_state.context, 0, 1, &texture_view);
-    ID3D11DeviceContext_PSSetSamplers(s_r_state.context, 0, 1, &s_r_state.sampler_state);
-    ID3D11DeviceContext_OMSetRenderTargets(s_r_state.context, 1, &s_r_state.rtview, NULL); // OM: Output Merger
-	ID3D11DeviceContext_OMSetBlendState(s_r_state.context, s_r_state.blend_state, NULL, 0xffffffff);
-    ID3D11DeviceContext_DrawIndexed(s_r_state.context, s_buf_idx * 6, 0, 0);
+        ID3D11DeviceContext_PSSetShaderResources(r_state->context, 0, 1, &texture_view);
+    ID3D11DeviceContext_PSSetSamplers(r_state->context, 0, 1, &r_state->sampler_state);
+    ID3D11DeviceContext_OMSetRenderTargets(r_state->context, 1, &r_state->rtview, NULL); // OM: Output Merger
+	ID3D11DeviceContext_OMSetBlendState(r_state->context, r_state->blend_state, NULL, 0xffffffff);
+    ID3D11DeviceContext_DrawIndexed(r_state->context, r_state->buf_idx * 6, 0, 0);
 
     // Reset buf_idx
-    s_buf_idx = 0;
+    r_state->buf_idx = 0;
 }
 
-static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
+static void push_rect(RendererState* r_state, UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
 {
-    if (s_buf_idx == BUFFER_SIZE) { flush(NULL); }
+    if (r_state->buf_idx == BUFFER_SIZE) { flush(r_state, NULL); }
 
-    int vert_idx  = s_buf_idx * 4;
-    int index_idx = s_buf_idx * 6;
-    s_buf_idx++;
+    int vert_idx  = r_state->buf_idx * 4;
+    int index_idx = r_state->buf_idx * 6;
+    r_state->buf_idx++;
 
     // Update vbuffer (pos)
-    s_vert_data[vert_idx + 0].pos[0] = (float)dst.x;
-    s_vert_data[vert_idx + 0].pos[1] = (float)dst.y;
-    s_vert_data[vert_idx + 1].pos[0] = (float)dst.x + dst.w;
-    s_vert_data[vert_idx + 1].pos[1] = (float)dst.y;
-    s_vert_data[vert_idx + 2].pos[0] = (float)dst.x;
-    s_vert_data[vert_idx + 2].pos[1] = (float)dst.y + dst.h;
-    s_vert_data[vert_idx + 3].pos[0] = (float)dst.x + dst.w;
-    s_vert_data[vert_idx + 3].pos[1] = (float)dst.y + dst.h;
+    r_state->vert_data[vert_idx + 0].pos[0] = (float)dst.x;
+    r_state->vert_data[vert_idx + 0].pos[1] = (float)dst.y;
+    r_state->vert_data[vert_idx + 1].pos[0] = (float)dst.x + dst.w;
+    r_state->vert_data[vert_idx + 1].pos[1] = (float)dst.y;
+    r_state->vert_data[vert_idx + 2].pos[0] = (float)dst.x;
+    r_state->vert_data[vert_idx + 2].pos[1] = (float)dst.y + dst.h;
+    r_state->vert_data[vert_idx + 3].pos[0] = (float)dst.x + dst.w;
+    r_state->vert_data[vert_idx + 3].pos[1] = (float)dst.y + dst.h;
 
     // Update vbuffer (uv)
     if (tex_index == 0)
@@ -493,44 +417,44 @@ static void push_rect(UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
         float y = src.y / (float)ATLAS_HEIGHT;
         float w = src.w / (float)ATLAS_WIDTH;
         float h = src.h / (float)ATLAS_HEIGHT;
-        s_vert_data[vert_idx + 0].uv[0] = x;
-        s_vert_data[vert_idx + 0].uv[1] = y;
-        s_vert_data[vert_idx + 1].uv[0] = x + w;
-        s_vert_data[vert_idx + 1].uv[1] = y;
-        s_vert_data[vert_idx + 2].uv[0] = x;
-        s_vert_data[vert_idx + 2].uv[1] = y + h;
-        s_vert_data[vert_idx + 3].uv[0] = x + w;
-        s_vert_data[vert_idx + 3].uv[1] = y + h;
+        r_state->vert_data[vert_idx + 0].uv[0] = x;
+        r_state->vert_data[vert_idx + 0].uv[1] = y;
+        r_state->vert_data[vert_idx + 1].uv[0] = x + w;
+        r_state->vert_data[vert_idx + 1].uv[1] = y;
+        r_state->vert_data[vert_idx + 2].uv[0] = x;
+        r_state->vert_data[vert_idx + 2].uv[1] = y + h;
+        r_state->vert_data[vert_idx + 3].uv[0] = x + w;
+        r_state->vert_data[vert_idx + 3].uv[1] = y + h;
     }
     else
     {
-        s_vert_data[vert_idx + 0].uv[0] = 0;
-        s_vert_data[vert_idx + 0].uv[1] = 0;
-        s_vert_data[vert_idx + 1].uv[0] = 1;
-        s_vert_data[vert_idx + 1].uv[1] = 0;
-        s_vert_data[vert_idx + 2].uv[0] = 0;
-        s_vert_data[vert_idx + 2].uv[1] = 1;
-        s_vert_data[vert_idx + 3].uv[0] = 1;
-        s_vert_data[vert_idx + 3].uv[1] = 1;
+        r_state->vert_data[vert_idx + 0].uv[0] = 0;
+        r_state->vert_data[vert_idx + 0].uv[1] = 0;
+        r_state->vert_data[vert_idx + 1].uv[0] = 1;
+        r_state->vert_data[vert_idx + 1].uv[1] = 0;
+        r_state->vert_data[vert_idx + 2].uv[0] = 0;
+        r_state->vert_data[vert_idx + 2].uv[1] = 1;
+        r_state->vert_data[vert_idx + 3].uv[0] = 1;
+        r_state->vert_data[vert_idx + 3].uv[1] = 1;
     }
 
      // Update vbuffer (col & tex_index)
-     for (int i = 0; i < 4; i++) 
+     for (int i = 0; i < 4; i++)
      {
-         memcpy((char*)(s_vert_data + vert_idx + i) + offsetof(Vertex, col), &color, 4);
-         s_vert_data[vert_idx + i].tex_index = tex_index;
+         memcpy((char*)(r_state->vert_data + vert_idx + i) + offsetof(Vertex, col), &color, 4);
+         r_state->vert_data[vert_idx + i].tex_index = tex_index;
      }
 
     // Update index buffer
-    s_index_data[index_idx + 0] = vert_idx + 0;
-    s_index_data[index_idx + 1] = vert_idx + 1;
-    s_index_data[index_idx + 2] = vert_idx + 2;
-    s_index_data[index_idx + 3] = vert_idx + 2;
-    s_index_data[index_idx + 4] = vert_idx + 1;
-    s_index_data[index_idx + 5] = vert_idx + 3;
+    r_state->index_data[index_idx + 0] = vert_idx + 0;
+    r_state->index_data[index_idx + 1] = vert_idx + 1;
+    r_state->index_data[index_idx + 2] = vert_idx + 2;
+    r_state->index_data[index_idx + 3] = vert_idx + 2;
+    r_state->index_data[index_idx + 4] = vert_idx + 1;
+    r_state->index_data[index_idx + 5] = vert_idx + 3;
 }
 
-void r_init()
+void r_init(RendererState* r_state)
 {
     // Create device and context
     // (Need to add BGRA support for compatibility with Direct2D)
@@ -540,13 +464,13 @@ void r_init()
 #endif
     D3D_FEATURE_LEVEL levels[] = { D3D_FEATURE_LEVEL_11_0 };
     D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, flags, levels, ARRAYSIZE(levels),
-                      D3D11_SDK_VERSION, &s_r_state.device, NULL, &s_r_state.context);
+                      D3D11_SDK_VERSION, &r_state->device, NULL, &r_state->context);
 
 #ifndef NDEBUG
     // for debug builds enable VERY USEFUL debug break on API errors
     {
         ID3D11InfoQueue* info;
-        ID3D11Device_QueryInterface(s_r_state.device, &IID_ID3D11InfoQueue, (void**)&info);
+        ID3D11Device_QueryInterface(r_state->device, &IID_ID3D11InfoQueue, (void**)&info);
         ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_CORRUPTION, TRUE);
         ID3D11InfoQueue_SetBreakOnSeverity(info, D3D11_MESSAGE_SEVERITY_ERROR, TRUE);
         ID3D11InfoQueue_Release(info);
@@ -564,7 +488,7 @@ void r_init()
 #endif
 
     // Create swap chain
-    create_swapchain(g_window, s_r_state.device, &s_r_state.swapchain);
+    create_swapchain(g_window, r_state->device, &r_state->swapchain);
 
     // Create sampler state
     {
@@ -575,13 +499,13 @@ void r_init()
             .AddressW       = D3D11_TEXTURE_ADDRESS_WRAP,
             .ComparisonFunc = D3D11_COMPARISON_NEVER,
         };
-        ID3D11Device_CreateSamplerState(s_r_state.device, &desc, &s_r_state.sampler_state);
+        ID3D11Device_CreateSamplerState(r_state->device, &desc, &r_state->sampler_state);
     }
 
     // Create texture buffer (font)
     {
         unsigned char* temp_bitmap = malloc(ATLAS_WIDTH * ATLAS_HEIGHT);
-        get_atlas(temp_bitmap);
+        get_atlas(r_state, temp_bitmap);
         D3D11_TEXTURE2D_DESC desc = {
             .Width            = ATLAS_WIDTH,
             .Height           = ATLAS_HEIGHT,
@@ -597,8 +521,8 @@ void r_init()
             .SysMemPitch = ATLAS_WIDTH * 1,
         };
         ID3D11Texture2D* texture;
-        ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &texture_subresource_data, &texture);
-        ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, 0, &s_r_state.texture_view);
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, &texture_subresource_data, &texture);
+        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, 0, &r_state->texture_view);
         ID3D11Texture2D_Release(texture);
         free(temp_bitmap);
     }
@@ -606,27 +530,27 @@ void r_init()
     // Create vertex buffer
     {
         D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(s_vert_data),
+            .ByteWidth      = sizeof(r_state->vert_data),
             .Usage          = D3D11_USAGE_DYNAMIC,
             .BindFlags      = D3D11_BIND_VERTEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
         };
 
-        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_vert_data };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.vbuffer);
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = r_state->vert_data };
+        ID3D11Device_CreateBuffer(r_state->device, &desc, &initial, &r_state->vbuffer);
     }
 
     // Create index buffer
     {
         D3D11_BUFFER_DESC desc = {
-            .ByteWidth      = sizeof(s_index_data),
+            .ByteWidth      = sizeof(r_state->index_data),
             .Usage          = D3D11_USAGE_DYNAMIC,
             .BindFlags      = D3D11_BIND_INDEX_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
         };
 
-        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = s_index_data };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, &initial, &s_r_state.ibuffer);
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = r_state->index_data };
+        ID3D11Device_CreateBuffer(r_state->device, &desc, &initial, &r_state->ibuffer);
     }
 
     // Create constant buffer for delivering MVP (Model View Projection)
@@ -637,7 +561,7 @@ void r_init()
             .BindFlags      = D3D11_BIND_CONSTANT_BUFFER,
             .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
         };
-        ID3D11Device_CreateBuffer(s_r_state.device, &desc, NULL, &s_r_state.cbuffer);
+        ID3D11Device_CreateBuffer(r_state->device, &desc, NULL, &r_state->cbuffer);
     }
 
     // Create blend state
@@ -654,7 +578,7 @@ void r_init()
                 .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
             }
         };
-        ID3D11Device_CreateBlendState(s_r_state.device, &desc, &s_r_state.blend_state);
+        ID3D11Device_CreateBlendState(r_state->device, &desc, &r_state->blend_state);
     }
 
     // Create rasterizer state
@@ -664,7 +588,7 @@ void r_init()
             .CullMode = D3D11_CULL_NONE,
             .ScissorEnable = TRUE,
         };
-        ID3D11Device_CreateRasterizerState(s_r_state.device, &desc, &s_r_state.raster_state);
+        ID3D11Device_CreateRasterizerState(r_state->device, &desc, &r_state->raster_state);
     }
 
     // Create input layout, vertex shader, pixel shader
@@ -678,32 +602,32 @@ void r_init()
         };
         #include "d3d11_vshader.h"
         #include "d3d11_pshader.h"
-        ID3D11Device_CreateVertexShader(s_r_state.device, d3d11_vshader, sizeof(d3d11_vshader), NULL, &s_r_state.vshader);
-        ID3D11Device_CreatePixelShader(s_r_state.device, d3d11_pshader, sizeof(d3d11_pshader), NULL, &s_r_state.pshader);
-        ID3D11Device_CreateInputLayout(s_r_state.device, desc, ARRAYSIZE(desc), d3d11_vshader, sizeof(d3d11_vshader), &s_r_state.layout);
+        ID3D11Device_CreateVertexShader(r_state->device, d3d11_vshader, sizeof(d3d11_vshader), NULL, &r_state->vshader);
+        ID3D11Device_CreatePixelShader(r_state->device, d3d11_pshader, sizeof(d3d11_pshader), NULL, &r_state->pshader);
+        ID3D11Device_CreateInputLayout(r_state->device, desc, ARRAYSIZE(desc), d3d11_vshader, sizeof(d3d11_vshader), &r_state->layout);
     }
 
     // Prepare a void render target view
-    s_r_state.rtview = NULL;
+    r_state->rtview = NULL;
 
     // Create render target view for backbuffer texture
     ID3D11Texture2D* texture;
-    IDXGISwapChain1_GetBuffer(s_r_state.swapchain, 0, &IID_ID3D11Texture2D, (void**)&texture);
-    ID3D11Device_CreateRenderTargetView(s_r_state.device, (ID3D11Resource*)texture, NULL, &s_r_state.rtview);
+    IDXGISwapChain1_GetBuffer(r_state->swapchain, 0, &IID_ID3D11Texture2D, (void**)&texture);
+    ID3D11Device_CreateRenderTargetView(r_state->device, (ID3D11Resource*)texture, NULL, &r_state->rtview);
     ID3D11Texture2D_Release(texture);
 
-    // If we don't set clipping, and there are no subsequent controls 
+    // If we don't set clipping, and there are no subsequent controls
     // to set clipping either, D3D11 will render nothing
-    r_set_clip_rect(unclipped_rect);
+    r_set_clip_rect(r_state, unclipped_rect);
 }
 
-void r_clear(UI_Color color)
+void r_clear(RendererState* r_state, UI_Color color)
 {
     float color_f[4] = { color.r / 255.f, color.g / 255.f, color.b / 255.f, color.a / 255.f };
-    ID3D11DeviceContext_ClearRenderTargetView(s_r_state.context, s_r_state.rtview, color_f);
+    ID3D11DeviceContext_ClearRenderTargetView(r_state->context, r_state->rtview, color_f);
 
     // draw dot background
-    UI_Rect client_rect = ui_rect(0, 0, g_client_width, g_client_height);
+    UI_Rect client_rect = ui_rect(0, 0, r_state->client_width, r_state->client_height);
     UI_Color dot_color = ui_color(
         (int)(color.r * 0.9f),
         (int)(color.g * 0.9f),
@@ -715,33 +639,33 @@ void r_clear(UI_Color color)
     for (int y = client_rect.y + dot_spacing; y < client_rect.y + client_rect.h; y += dot_spacing) {
         for (int x = client_rect.x + dot_spacing; x < client_rect.x + client_rect.w; x += dot_spacing) {
             UI_Rect dot = ui_rect(x, y, dot_size, dot_size);
-            r_draw_rect(dot, dot_color);
+            r_draw_rect(r_state, dot, dot_color);
         }
     }
 
     // draw border
     UI_Color border_color = ui_color(0, 0, 255, 255);
-    r_draw_rect(ui_rect(client_rect.x + 1, client_rect.y, client_rect.w - 2, 1), border_color);
-    r_draw_rect(ui_rect(client_rect.x + 1, client_rect.y + client_rect.h - 1, client_rect.w - 2, 1), border_color);
-    r_draw_rect(ui_rect(client_rect.x, client_rect.y, 1, client_rect.h), border_color);
-    r_draw_rect(ui_rect(client_rect.x + client_rect.w - 1, client_rect.y, 1, client_rect.h), border_color);
+    r_draw_rect(r_state, ui_rect(client_rect.x + 1, client_rect.y, client_rect.w - 2, 1), border_color);
+    r_draw_rect(r_state, ui_rect(client_rect.x + 1, client_rect.y + client_rect.h - 1, client_rect.w - 2, 1), border_color);
+    r_draw_rect(r_state, ui_rect(client_rect.x, client_rect.y, 1, client_rect.h), border_color);
+    r_draw_rect(r_state, ui_rect(client_rect.x + client_rect.w - 1, client_rect.y, 1, client_rect.h), border_color);
 }
 
-void r_draw_rect(UI_Rect rect, UI_Color color)
+void r_draw_rect(RendererState* r_state, UI_Rect rect, UI_Color color)
 {
-    push_rect(rect, s_atlas[0].src, color, 0);
+    push_rect(r_state, rect, r_state->atlas[0].src, color, 0);
 }
 
-void r_draw_icon(int id, UI_Rect rect, UI_Color color)
+void r_draw_icon(RendererState* r_state, int id, UI_Rect rect, UI_Color color)
 {
-    UI_Rect src = s_atlas[id].src;
+    UI_Rect src = r_state->atlas[id].src;
     int x = rect.x + (rect.w - src.w) / 2;
     int y = rect.y + (rect.h - src.h) / 2;
-    push_rect(ui_rect(x, y, src.w, src.h), src, color, 0);
+    push_rect(r_state, ui_rect(x, y, src.w, src.h), src, color, 0);
 }
 
 // TODO: need better performance
-static int find_atlas_idx_by_codepoint(int codepoint)
+static int find_atlas_state_idx_by_codepoint(RendererState* r_state, int codepoint)
 {
     if (codepoint < 127)
     {
@@ -751,7 +675,7 @@ static int find_atlas_idx_by_codepoint(int codepoint)
     {
         for (int i = 0; i < NUM_CHARS; i++)
         {
-            if (s_atlas[i].codepoint == codepoint)
+            if (r_state->atlas[i].codepoint == codepoint)
                 return i;
         }
     }
@@ -759,20 +683,20 @@ static int find_atlas_idx_by_codepoint(int codepoint)
     return 63 - 32 + NUM_CHARS_SYMBOL + 1; // '?'
 }
 
-void r_draw_text(const wchar_t* text, UI_Vec2 pos, UI_Color color)
+void r_draw_text(RendererState* r_state, const wchar_t* text, UI_Vec2 pos, UI_Color color)
 {
     UI_Rect dst = { pos.x, pos.y + (int)(24 * 0.8), 0, 0 };
     for (const wchar_t* p = text; *p; p++)
     {
-        int chr = find_atlas_idx_by_codepoint(*p);
-        UI_Rect src = s_atlas[chr].src;
-        Atlas* b = &s_atlas[chr];
+        int chr = find_atlas_state_idx_by_codepoint(r_state, *p);
+        UI_Rect src = r_state->atlas[chr].src;
+        Atlas* b = &r_state->atlas[chr];
 
         dst.x += (int)b->xoff;
         dst.y += (int)b->yoff;
         dst.w = src.w;
         dst.h = src.h;
-        push_rect(dst, src, color, 0);
+        push_rect(r_state, dst, src, color, 0);
 
         dst.x += (int)(b->xadvance - b->xoff);
         dst.y -= (int)b->yoff;
@@ -781,45 +705,46 @@ void r_draw_text(const wchar_t* text, UI_Vec2 pos, UI_Color color)
 
 int r_get_text_width(const wchar_t* text, int len)
 {
-    int res = 0;
-    for (const wchar_t* p = text; *p && len--; p++)
-    {
-        int chr = find_atlas_idx_by_codepoint(*p);
-        res += s_atlas[chr].xadvance;
-    }
-    return res;
+    // int res = 0;
+    // for (const wchar_t* p = text; *p && len--; p++)
+    // {
+    //     int chr = find_atlas_state_idx_by_codepoint(r_state, *p);
+    //     res += r_state->atlas[chr].xadvance;
+    // }
+    // return res;
+    return 100;
 }
 
-int r_get_text_height(void)
+int r_get_text_height()
 {
     return 24;
 }
 
-void r_set_clip_rect(UI_Rect rect) 
+void r_set_clip_rect(RendererState* r_state, UI_Rect rect)
 {
     // TODO: Because of this flush, the memory usage will grow to huge (e.g 15MB => 35~80MB).
     //       The key reason is `map_vertex_index_buffer`.
-    flush(NULL);
+    flush(r_state, NULL);
     D3D11_RECT scissor_rect = {
         .left = rect.x,
         .top = rect.y,
         .right = rect.x + rect.w,
         .bottom = rect.y + rect.h,
     };
-    ID3D11DeviceContext_RSSetScissorRects(s_r_state.context, 1, &scissor_rect);
+    ID3D11DeviceContext_RSSetScissorRects(r_state->context, 1, &scissor_rect);
 }
 
-static ImageResource* r_load_image(const char* path) 
+static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererState* r_state, const char* path)
 {
     // load image data
     unsigned width, height;
-    unsigned char* data = image_load(path, &width, &height);
+    unsigned char* data = image_load(img_factory, path, &width, &height);
     expect(data);
 
     // create texture view
     ID3D11ShaderResourceView* view;
     {
-        D3D11_TEXTURE2D_DESC desc = 
+        D3D11_TEXTURE2D_DESC desc =
         {
             .Width = width,
             .Height = height,
@@ -830,102 +755,102 @@ static ImageResource* r_load_image(const char* path)
             .Usage = D3D11_USAGE_IMMUTABLE,
             .BindFlags = D3D11_BIND_SHADER_RESOURCE,
         };
-        D3D11_SUBRESOURCE_DATA initial = 
+        D3D11_SUBRESOURCE_DATA initial =
         {
             .pSysMem = data,
             .SysMemPitch = width * 4,
         };
         ID3D11Texture2D* texture;
-        ID3D11Device_CreateTexture2D(s_r_state.device, &desc, &initial, &texture);
-        ID3D11Device_CreateShaderResourceView(s_r_state.device, (ID3D11Resource*)texture, NULL, &view);
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, &initial, &texture);
+        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, NULL, &view);
         ID3D11Texture2D_Release(texture);
     }
     free(data);
 
     // add to cache
-    if (s_image_cache.count >= s_image_cache.capacity) 
+    if (r_state->image_cache.count >= r_state->image_cache.capacity)
     {
-        s_image_cache.capacity = s_image_cache.capacity ? s_image_cache.capacity * 2 : 16;
-        s_image_cache.resources = realloc(s_image_cache.resources, s_image_cache.capacity * sizeof(ImageResource));
+        r_state->image_cache.capacity = r_state->image_cache.capacity ? r_state->image_cache.capacity * 2 : 16;
+        r_state->image_cache.resources = realloc(r_state->image_cache.resources, r_state->image_cache.capacity * sizeof(ImageResource));
     }
 
-    int n = s_image_cache.count;
+    int n = r_state->image_cache.count;
     expect(n < 128);
-    s_image_cache.resources[n] = (ImageResource)
+    r_state->image_cache.resources[n] = (ImageResource)
     {
         .view = view,
         .width = width,
         .height = height
     };
-    s_image_path_res_entries[n].path = path;
-    s_image_path_res_entries[n].resource = &s_image_cache.resources[n];
-    s_image_cache.count++;
-    return s_image_path_res_entries[n].resource;
+    r_state->image_path_res_entries[n].path = path;
+    r_state->image_path_res_entries[n].resource = &r_state->image_cache.resources[n];
+    r_state->image_cache.count++;
+    return r_state->image_path_res_entries[n].resource;
 }
 
-void r_draw_image(UI_Rect rect, const char* path) 
+void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path)
 {
-    flush(NULL);
+    flush(r_state, NULL);
     ImageResource* img = 0;
     for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
     {
-        if (s_image_path_res_entries[i].path == path)
+        if (r_state->image_path_res_entries[i].path == path)
         {
-            img = s_image_path_res_entries[i].resource;
+            img = r_state->image_path_res_entries[i].resource;
         }
     }
     if (!img)
-        img = r_load_image(path);
+        img = r_load_image(img_factory, r_state, path);
 
     // calculate aspect ratio preserved dimensions
     float img_ratio = (float)img->width / img->height;
     float rect_ratio = (float)rect.w / rect.h;
-    
+
     UI_Rect dst;
-    if (img_ratio > rect_ratio) 
+    if (img_ratio > rect_ratio)
     {
         dst.w = rect.w;
         dst.h = (int)(rect.w / img_ratio);
-    } 
-    else 
+    }
+    else
     {
         dst.h = rect.h;
         dst.w = (int)(rect.h * img_ratio);
     }
-    
+
     // center in rect
     dst.x = rect.x + (rect.w - dst.w) / 2;
     dst.y = rect.y + (rect.h - dst.h) / 2;
 
     // set image texture
-    push_rect(dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
-    flush(img->view);
+    push_rect(r_state, dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
+    flush(r_state, img->view);
 }
 
-void r_present()
+void r_present(RendererState* r_state)
 {
-    flush(NULL);
-    IDXGISwapChain1_Present(s_r_state.swapchain, 1, 0);
+    flush(r_state, NULL);
+    IDXGISwapChain1_Present(r_state->swapchain, 1, 0);
 }
 
-void r_clean()
-{   
-    for (int i = 0; i < s_image_cache.count; i++)
+void r_clean(RendererState* r_state)
+{
+    for (int i = 0; i < r_state->image_cache.count; i++)
     {
-        ID3D11ShaderResourceView_Release(s_image_cache.resources[i].view);
+        ID3D11ShaderResourceView_Release(r_state->image_cache.resources[i].view);
     }
-    ID3D11RenderTargetView_Release(s_r_state.rtview);
-    ID3D11RasterizerState_Release(s_r_state.raster_state);
-    ID3D11SamplerState_Release(s_r_state.sampler_state);
-    ID3D11ShaderResourceView_Release(s_r_state.texture_view);
-    ID3D11Buffer_Release(s_r_state.vbuffer);
-    ID3D11Buffer_Release(s_r_state.ibuffer);
-    ID3D11Buffer_Release(s_r_state.cbuffer);
-    ID3D11BlendState_Release(s_r_state.blend_state);
-    ID3D11InputLayout_Release(s_r_state.layout);
-    ID3D11VertexShader_Release(s_r_state.vshader);
-    ID3D11PixelShader_Release(s_r_state.pshader);
-    IDXGISwapChain1_Release(s_r_state.swapchain);
-    ID3D11DeviceContext_Release(s_r_state.context);
-    ID3D11Device_Release(s_r_state.device);
+    ID3D11RenderTargetView_Release(r_state->rtview);
+    ID3D11RasterizerState_Release(r_state->raster_state);
+    ID3D11SamplerState_Release(r_state->sampler_state);
+    ID3D11ShaderResourceView_Release(r_state->texture_view);
+    ID3D11Buffer_Release(r_state->vbuffer);
+    ID3D11Buffer_Release(r_state->ibuffer);
+    ID3D11Buffer_Release(r_state->cbuffer);
+    ID3D11BlendState_Release(r_state->blend_state);
+    ID3D11InputLayout_Release(r_state->layout);
+    ID3D11VertexShader_Release(r_state->vshader);
+    ID3D11PixelShader_Release(r_state->pshader);
+    IDXGISwapChain1_Release(r_state->swapchain);
+    ID3D11DeviceContext_Release(r_state->context);
+    ID3D11Device_Release(r_state->device);
 }

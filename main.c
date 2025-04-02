@@ -16,11 +16,71 @@
 #include "renderer.h"
 #include "image.h"
 
-int g_client_width = 800;
-int g_client_height = 600;
+#define CLIENT_WIDTH 800
+#define CLIENT_HEIGHT 600
+
 UI_Context* g_ctx;
+RendererState r_state = { 0 };
 
 static POINT s_drag_start_pos;
+
+//
+// hot reload helper
+//
+
+typedef int (*TextWidthFunc)(const wchar_t* text, int len);
+typedef int (*TextHeightFunc)();
+typedef void (*HotReloadedProcess)(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx,
+        TextWidthFunc width_func, TextHeightFunc height_func);
+
+typedef struct {
+    HINSTANCE dll;
+    FILETIME last_write_time;
+    HotReloadedProcess func;
+} HotReloader;
+
+static FILETIME get_dll_write_time(const char* path) 
+{
+    FILETIME time = { 0 };
+    WIN32_FILE_ATTRIBUTE_DATA data;
+    if (GetFileAttributesExA(path, GetFileExInfoStandard, &data)) 
+    {
+        time = data.ftLastWriteTime;
+    }
+    return time;
+}
+
+static bool check_and_reload(HotReloader* hr) 
+{
+    FILETIME current_time = get_dll_write_time("process.dll");
+
+    if (CompareFileTime(&current_time, &hr->last_write_time) == 0) 
+    {
+        return false;
+    }
+    else
+    {
+        if (hr->dll) { 
+            FreeLibrary(hr->dll); 
+        }
+        CopyFile("process.dll", "_process.dll", 0);
+
+        // load new dll
+        hr->dll = LoadLibrary("_process.dll");
+        expect(hr->dll);
+        hr->func = (HotReloadedProcess)GetProcAddress(hr->dll, "hot_reloaded_process");
+        expect(hr->func);
+        __debugbreak();
+
+        // update last write time
+        hr->last_write_time = current_time;
+        return true;
+    }
+}
+
+//
+// window proc
+//
 
 static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LPARAM lparam)
 {
@@ -28,7 +88,7 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
     {
         case WM_NCCALCSIZE:
             // remove the standard window frame
-            if (!wparam) 
+            if (!wparam)
                 return DefWindowProcW(window, message, wparam, lparam);
             return 0;
         case WM_CREATE:
@@ -49,13 +109,13 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
             g_ctx->mouse_pos.y = HIWORD(lparam);
 
             // Handle window dragging
-            if (g_ctx->mouse_held && !g_ctx->lclicked) 
+            if (g_ctx->mouse_held && !g_ctx->lclicked)
             {
                 POINT cursor_pos;
                 GetCursorPos(&cursor_pos);
                 int dx = cursor_pos.x - s_drag_start_pos.x;
                 int dy = cursor_pos.y - s_drag_start_pos.y;
-                if (dx != 0 || dy != 0) 
+                if (dx != 0 || dy != 0)
                 {
                     RECT rect;
                     GetWindowRect(window, &rect);
@@ -89,59 +149,11 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
     return DefWindowProcW(window, message, wparam, lparam);
 }
 
+//
+// context relate functions
+//
 
-static void process_frame(UI_Context* ctx)
-{
-    ui_begin(ctx);
-    {
-        // window 1
-        ui_begin_window(ctx, L"window title 1", ui_rect(100, 100, 350, 200));
-        {
-            ui_layout_row(ctx, 3, 24);
-            {
-                ui_label(ctx, L"Hello");
-                ui_label(ctx, L"Bye");
-                ui_label(ctx, L"空山不见人");
-                ui_label(ctx, L"Do you know");
-                static int check = 0;
-                ui_checkbox(ctx, L"checkbox-dododo", &check);
-            }
-        }
-        ui_end_window(ctx);
-        // window 2
-        ui_begin_window(ctx, L"window title 2", ui_rect(550, 150, 150, 200));
-        {
-            ui_layout_row(ctx, 2, 24);
-            {
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test.png");
-                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test2.png");
-            }
-        }
-        ui_end_window(ctx);
-    }
-    ui_end(ctx);
-}
-
-static int text_width(const wchar_t* text, int len)
+int text_width(const wchar_t* text, int len)
 {
     if (len < 0)
     {
@@ -150,10 +162,14 @@ static int text_width(const wchar_t* text, int len)
     return r_get_text_width(text, len);
 }
 
-static int text_height()
+int text_height()
 {
     return r_get_text_height();
 }
+
+//
+// main
+//
 
 int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLine, int nShowCmd)
 {
@@ -162,11 +178,11 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         // Set the client position to screen center
         int screen_width  = GetSystemMetrics(SM_CXSCREEN);
         int screen_height = GetSystemMetrics(SM_CYSCREEN);
-        int x             = (screen_width - g_client_width) / 2;
-        int y             = (screen_height - g_client_height) / 2;
+        int x             = (screen_width - CLIENT_WIDTH) / 2;
+        int y             = (screen_height - CLIENT_HEIGHT) / 2;
 
         // Give the client area rectangle, get back the entire window rectangle
-        RECT rect         = { x, y, x + g_client_width, y + g_client_height };
+        RECT rect         = { x, y, x + CLIENT_WIDTH, y + CLIENT_HEIGHT };
         long window_style = 0;
         AdjustWindowRectEx(&rect, 0, 0, 0);
 
@@ -185,16 +201,22 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
     }
 
     // Init image factory & renderer & context
-    image_init(); 
-    r_init();
+    IWICImagingFactory* img_factory = NULL;
+    image_init(&img_factory);
+
+    r_init(&r_state);
+    r_state.client_width = CLIENT_WIDTH;
+    r_state.client_height = CLIENT_HEIGHT;
+
     g_ctx = malloc(sizeof(UI_Context));
     ui_init(g_ctx);
 
-    g_ctx->text_width = text_width;
-    g_ctx->text_height = text_height;
-
     // Show window
     ShowWindow(g_window, SW_SHOWDEFAULT);
+
+    // Init hot reloader
+    HotReloader hr = { 0 };
+    check_and_reload(&hr);
 
     // Run message and render loop
     for (;;)
@@ -210,27 +232,15 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
             continue;
         }
 
-        // Process frame
-        process_frame(g_ctx);
-
-        // Render
-        r_clear(ui_color(255, 255, 255, 255));
-        UI_Command* cmd = NULL;
-        while (ui_next_command(g_ctx, &cmd)) 
-        {
-            switch(cmd->type) 
-            {
-                case UI_COMMAND_RECT: r_draw_rect(cmd->rect.rect, cmd->rect.color); break;
-                case UI_COMMAND_TEXT: r_draw_text(cmd->text.str, cmd->text.pos, cmd->text.color); break;
-                case UI_COMMAND_CLIP: r_set_clip_rect(cmd->clip.rect); break;
-                case UI_COMMAND_IMAGE: r_draw_image(cmd->image.rect, cmd->image.path); break;
-            }
-        }
-        r_present();
+        // Hot reload: process frame & render
+        check_and_reload(&hr);
+        expect(hr.func);
+        hr.func(img_factory, &r_state, g_ctx, text_width, text_height);
     }
 
     // Clean
-    r_clean();
-    image_clean();
+    FreeLibrary(hr.dll);
+    r_clean(&r_state);
+    image_clean(img_factory);
     return 0;
 }

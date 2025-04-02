@@ -1,5 +1,5 @@
 #define COBJMACROS
 #include <wincodec.h>
-void image_init();
-void image_clean();
-unsigned char* image_load(const char* filename, unsigned* width, unsigned* height);
+void image_init(IWICImagingFactory** factory);
+void image_clean(IWICImagingFactory* factory);
+unsigned char* image_load(IWICImagingFactory* factory, const char* filename, unsigned* width, unsigned* height);
