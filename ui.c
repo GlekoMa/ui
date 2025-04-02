@@ -652,6 +652,30 @@ static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
+void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
+{
+    UI_Id   id = ui_get_id(ctx, &state, sizeof(state));
+    UI_Rect r = ui_layout_next(ctx);
+    ui_update_widget(ctx, id, r);
+
+    // handle click
+    if (ctx->mouse_lclick && ctx->lclicked == id)
+    {
+        *state = !*state;
+    }
+
+    // draw
+    UI_Rect r_text = ui_rect(r.x, r.y, r.w - r.h - ctx->style->padding * 2, r.h);
+    ui_draw_widget_text(ctx, label, r_text, UI_COLOR_TEXT);
+
+    UI_Rect r_box = ui_rect(r.x + r.w - r.h - ctx->style->padding, r.y, r.h, r.h);
+    ui_draw_decorate_box(ctx, r_box, ui_color(0, 0, 255, 255));
+    if (*state)
+    {
+        ui_draw_rect(ctx, r_box, ui_color(0, 255, 0, 255));
+    }
+}
+
 void ui_image(UI_Context* ctx, const char* path)
 {
     UI_Rect rect = ui_layout_next(ctx);

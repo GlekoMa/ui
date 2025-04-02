@@ -95,19 +95,21 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        ui_begin_window(ctx, L"window title 1", ui_rect(100, 100, 150, 200));
+        ui_begin_window(ctx, L"window title 1", ui_rect(100, 100, 350, 200));
         {
             ui_layout_row(ctx, 3, 24);
             {
                 ui_label(ctx, L"Hello");
                 ui_label(ctx, L"Bye");
-                ui_label(ctx, L"不害臊的姑娘");
+                ui_label(ctx, L"空山不见人");
                 ui_label(ctx, L"Do you know");
+                static int check = 0;
+                ui_checkbox(ctx, L"checkbox-dododo", &check);
             }
         }
         ui_end_window(ctx);
         // window 2
-        ui_begin_window(ctx, L"window title 2", ui_rect(150, 150, 150, 200));
+        ui_begin_window(ctx, L"window title 2", ui_rect(550, 150, 150, 200));
         {
             ui_layout_row(ctx, 2, 24);
             {
