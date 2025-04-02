@@ -63,7 +63,7 @@ static UI_Rect expand_rect(UI_Rect rect, int n)
 // function declare
 //
 
-static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid);
+static void ui_draw_widget_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid);
 
 //
 // commandlist
@@ -208,7 +208,7 @@ static void ui_set_rclicked(UI_Context* ctx, UI_Id id)
     ctx->updated_rclicked = true;
 }
 
-static void ui_update_control(UI_Context* ctx, UI_Id id, UI_Rect rect)
+static void ui_update_widget(UI_Context* ctx, UI_Id id, UI_Rect rect)
 {
     int mouseover = ui_mouse_over(ctx, rect);
     if (mouseover)
@@ -484,7 +484,7 @@ static void scrollbar(UI_Context* ctx, UI_Container* cnt)
         ctx->draw_frame(ctx, thumb, UI_COLOR_SCROLLTHUMB);
 
         // handle input
-        ui_update_control(ctx, id, thumb);
+        ui_update_widget(ctx, id, thumb);
         if (ctx->lclicked == id && ctx->mouse_held)
         {
             cnt->scroll.y += ctx->mouse_delta.y * cs.y / base.h; // a*(b/c)
@@ -520,8 +520,8 @@ void ui_begin_window(UI_Context* ctx, const wchar_t* title, UI_Rect rect)
         tr.h = ctx->style->title_height;
         ctx->draw_frame(ctx, tr, UI_COLOR_TITLEBG);
         UI_Id id = ui_get_id(ctx, "!title", 6);
-        ui_update_control(ctx, id, tr);
-        ui_draw_control_text(ctx, title, tr, UI_COLOR_TITLETEXT);
+        ui_update_widget(ctx, id, tr);
+        ui_draw_widget_text(ctx, title, tr, UI_COLOR_TITLETEXT);
         if (id == ctx->lclicked && ctx->mouse_held)
         {
             cnt->rect.x += ctx->mouse_delta.x;
@@ -618,10 +618,10 @@ static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
 }
 
 //
-// control
+// widget
 //
 
-static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
+static void ui_draw_widget_text(UI_Context* ctx, const wchar_t* str, UI_Rect rect, int colorid)
 {
     ui_push_clip_rect(ctx, rect);
     {
@@ -637,7 +637,7 @@ static void ui_draw_control_text(UI_Context* ctx, const wchar_t* str, UI_Rect re
 void ui_label(UI_Context* ctx, const wchar_t* text)
 {
     UI_Rect rect = ui_layout_next(ctx);
-    ui_draw_control_text(ctx, text, rect, UI_COLOR_TEXT);
+    ui_draw_widget_text(ctx, text, rect, UI_COLOR_TEXT);
 }
 
 static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
@@ -658,7 +658,7 @@ void ui_image(UI_Context* ctx, const char* path)
     ui_draw_image(ctx, rect, path);
 
     UI_Id id = ui_get_id(ctx, path, (int)strlen(path));
-    ui_update_control(ctx, id, rect);
+    ui_update_widget(ctx, id, rect);
     if (id == ctx->hover)
     {
         ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER]);
