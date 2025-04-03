@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+set start=%time%
 
 :: Check if build dir exist
 set BuildDir=build
@@ -17,7 +18,7 @@ if "%1"=="-r" (
 )
 
 :: --- Set compiler flags  ---
-set CommonCompilerFlags=/nologo /W3 /WX
+set CommonCompilerFlags=/nologo /W3 /WX /MP
 set CompilerDebugFlags=/Od /Zi /RTC1
 set CompilerReleaseFlags= /O2 /DNDEBUG
 if %IsRelease%==1 (
@@ -75,10 +76,22 @@ if exist "shader.hlsl" (
 :: --- Check success or failure ---
 if exist "%OutputDll%" (
     echo Info: Process DLL built successfully
-    if not exist "%BuildDir%\_process.dll" (
-        Copy /Y %OutputDll% %BuildDir%\_process.dll
-    )
+    Copy /Y %OutputDll% process.dll
 ) else (
     echo Error: Process DLL build failed
     exit /b 1
 )
+
+:: --- Calculate time taken ---
+set end=%time%
+set options="tokens=1-4 delims=:.,"
+for /f %options% %%a in ("%start%") do set /a start_m=100%%b%%100&set /a start_s=100%%c%%100&set /a start_ms=100%%d%%100
+for /f %options% %%a in ("%end%") do set /a end_m=100%%b%%100&set /a end_s=100%%c%%100&set /a end_ms=100%%d%%100
+:: Convert all to milliseconds first
+set /a start_total_ms=(start_m * 60 * 1000) + (start_s * 1000) + start_ms
+set /a end_total_ms=(end_m * 60 * 1000) + (end_s * 1000) + end_ms
+:: Calculate difference
+set /a diff_ms=end_total_ms-start_total_ms
+set /a diff_s=diff_ms/1000
+set /a diff_ms_remain=diff_ms%%1000
+echo Time taken: %diff_s%.%diff_ms_remain% seconds
