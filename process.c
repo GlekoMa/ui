@@ -22,54 +22,33 @@ static void process_frame(UI_Context* ctx)
     ui_begin(ctx);
     {
         // window 1
-        ui_begin_window(ctx, L"window title 1", ui_rect(100, 100, 350, 200));
+        ui_begin_window(ctx, L"window title 1", ui_rect(10, 10, 200, 150));
         {
             ui_layout_row(ctx, 3, 24);
             {
                 ui_label(ctx, L"Hello");
                 ui_label(ctx, L"Bye");
                 ui_label(ctx, L"空山不见人");
-                ui_label(ctx, L"Do you know");
-                static int check = 0;
-                ui_checkbox(ctx, L"check", &check);
+            }
+            ui_layout_row(ctx, 2, 24);
+            {
+                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test.png");
+                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test2.png");
+            }
+            ui_layout_row(ctx, 1, 24);
+            {
+                for (int i = 0; i < 10; i++)
+                    ui_label(ctx, L"test");
             }
         }
         ui_end_window(ctx);
         // window 2
-        ui_begin_window(ctx, L"window title 2", ui_rect(550, 150, 150, 200));
+        ui_begin_window(ctx, L"window title 2", ui_rect(180, 80, 200, 200));
         {
-            ui_layout_row(ctx, 2, 24);
+            ui_layout_row(ctx, 1, 24);
             {
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_label(ctx, L"jackdoyouknow");
-                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test.png");
-                ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test2.png");
+                static int check = 0;
+                ui_checkbox(ctx, L"check", &check);
             }
         }
         ui_end_window(ctx);
