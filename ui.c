@@ -19,14 +19,18 @@
     } while (0)
 
 static UI_Style default_style = {
-    // size | padding | spacing | title_height
-    { 68, 10 }, 5, 4, 26,
+    // padding | spacing | title_height | checkbox_size
+    5, 4, 26, { 32, 16 },
     // scrollbar_size | thumb_size
     12, 8,
     {
         { 56,  58,  66,  255 }, // UI_COLOR_TEXT
         { 18,  18,  18,  255 }, // UI_COLOR_TITLETEXT
         { 238, 238, 238, 255 }, // UI_COLOR_TITLEBG
+        { 200, 200, 200, 255 }, // UI_COLOR_CHECKBOX_INACTIVE_BG
+        { 0,   120, 215, 255 }, // UI_COLOR_CHECKBOX_ACTIVE_BG
+        { 110, 110, 110, 255 }, // UI_COLOR_CHECKBOX_INACTIVE_THUMB
+        { 255, 255, 255, 255 }, // UI_COLOR_CHECKBOX_ACTIVE_THUMB
         { 206, 206, 206, 255 }, // UI_COLOR_BORDER
         { 10,  210, 20,  255 }, // UI_COLOR_BORDER_LCLICK
         { 190, 130, 0,   255 }, // UI_COLOR_BORDER_RCLICK
@@ -598,12 +602,12 @@ static void ui_draw_image(UI_Context* ctx, UI_Rect rect, const char* path)
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
-static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
+static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color, int bw)
 {
-    ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y, rect.w - 2, 1), color);
-    ui_draw_rect(ctx, ui_rect(rect.x + 1, rect.y + rect.h - 1, rect.w - 2, 1), color);
-    ui_draw_rect(ctx, ui_rect(rect.x, rect.y, 1, rect.h), color);
-    ui_draw_rect(ctx, ui_rect(rect.x + rect.w - 1, rect.y, 1, rect.h), color);
+    ui_draw_rect(ctx, ui_rect(rect.x + bw, rect.y, rect.w - 2 * bw, bw), color);
+    ui_draw_rect(ctx, ui_rect(rect.x + bw, rect.y + rect.h - bw, rect.w - 2 * bw, bw), color);
+    ui_draw_rect(ctx, ui_rect(rect.x, rect.y, bw, rect.h), color);
+    ui_draw_rect(ctx, ui_rect(rect.x + rect.w - bw, rect.y, bw, rect.h), color);
 }
 
 static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
@@ -613,7 +617,7 @@ static void draw_frame(UI_Context* ctx, UI_Rect rect, int colorid)
     {
         return;
     }
-    ui_draw_box(ctx, expand_rect(rect, 1), ctx->style->colors[UI_COLOR_BORDER]);
+    ui_draw_box(ctx, expand_rect(rect, 1), ctx->style->colors[UI_COLOR_BORDER], 1);
 }
 
 //
@@ -639,39 +643,62 @@ void ui_label(UI_Context* ctx, const wchar_t* text)
     ui_draw_widget_text(ctx, text, rect, UI_COLOR_TEXT);
 }
 
-static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color)
+static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color, int bw)
 {
-    UI_Rect box_rect = expand_rect(rect, 1);
+    UI_Rect box_rect = expand_rect(rect, bw);
     // check if needs to be clipped
     int clipped = ui_check_clip(ctx, box_rect);
     if (clipped == UI_CLIP_ALL) { return; }
     if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
-    ui_draw_box(ctx, expand_rect(box_rect, 1), color);
+    ui_draw_box(ctx, expand_rect(box_rect, bw), color, bw);
     // reset clipping if it was set
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
 void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
 {
-    UI_Id   id = ui_get_id(ctx, &state, sizeof(state));
     UI_Rect r = ui_layout_next(ctx);
-    ui_update_widget(ctx, id, r);
+    int r_box_w = ctx->style->checkbox_size.x;
+    int r_box_h = ctx->style->checkbox_size.y;
 
-    // handle click
+    // calculate text, box, thumb rect
+    UI_Rect r_text = ui_rect(r.x, r.y, r.w - r_box_w - ctx->style->padding * 2, r.h);
+    UI_Rect r_box = ui_rect(
+        r.x + r.w - r_box_w - ctx->style->padding,
+        r.y + (r.h - r_box_h) / 2,
+        r_box_w, r_box_h
+    );
+    UI_Rect r_thumb;
+    {
+        int r_thumb_wh = r_box.h - 4;
+        int r_thumb_x_s = r_box.x + 2;
+        r_thumb.x = r_thumb_x_s;
+        r_thumb.y = r_box.y + 2;
+        r_thumb.w = r_thumb_wh;
+        r_thumb.h = r_thumb_wh;
+    }
+
+    // update widget state (hover & clicked)
+    UI_Id   id = ui_get_id(ctx, &state, sizeof(state));
+    ui_update_widget(ctx, id, r_box);
     if (ctx->mouse_lclick && ctx->lclicked == id)
     {
         *state = !*state;
     }
 
-    // draw
-    UI_Rect r_text = ui_rect(r.x, r.y, r.w - r.h - ctx->style->padding * 2, r.h);
+    // draw text & checkbox
     ui_draw_widget_text(ctx, label, r_text, UI_COLOR_TEXT);
-
-    UI_Rect r_box = ui_rect(r.x + r.w - r.h - ctx->style->padding, r.y, r.h, r.h);
-    ui_draw_decorate_box(ctx, r_box, ui_color(0, 0, 255, 255));
-    if (*state)
+    if (!*state)
     {
-        ui_draw_rect(ctx, r_box, ui_color(0, 255, 0, 255));
+        ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_BG]);
+        ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_THUMB]);
+    }
+    else
+    {
+        int r_thumb_x_e = r_box.x + (r_box.w - r_thumb.w - 2);
+        r_thumb.x = r_thumb_x_e;
+        ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_BG]);
+        ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_THUMB]);
     }
 }
 
@@ -684,7 +711,7 @@ void ui_image(UI_Context* ctx, const char* path)
     ui_update_widget(ctx, id, rect);
     if (id == ctx->hover)
     {
-        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER]);
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER], 1);
     }
 }
 

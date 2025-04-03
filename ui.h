@@ -35,6 +35,10 @@ enum {
     UI_COLOR_TEXT,
     UI_COLOR_TITLETEXT,
     UI_COLOR_TITLEBG,
+    UI_COLOR_CHECKBOX_INACTIVE_BG,
+    UI_COLOR_CHECKBOX_ACTIVE_BG,
+    UI_COLOR_CHECKBOX_INACTIVE_THUMB,
+    UI_COLOR_CHECKBOX_ACTIVE_THUMB,
     UI_COLOR_BORDER,
     UI_COLOR_BORDER_LCLICK,
     UI_COLOR_BORDER_RCLICK,
@@ -107,10 +111,10 @@ typedef struct {
 } UI_Layout;
 
 typedef struct {
-    UI_Vec2 size;
     int padding;
     int spacing;
     int title_height;
+    UI_Vec2 checkbox_size;
     int scrollbar_size;
     int thumb_size;
     UI_Color colors[UI_COLOR_MAX];
