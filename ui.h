@@ -137,6 +137,7 @@ struct UI_Context {
     bool updated_lclicked;
     bool updated_rclicked;
     int frame;
+    float animation_dt;
     UI_Container* hover_root;
     UI_Container* next_hover_root;
     UI_Container* scroll_target;

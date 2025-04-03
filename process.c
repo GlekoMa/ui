@@ -77,12 +77,11 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
-static float calculate_fps_average()
+static float calculate_animation_dt()
 {
     static LARGE_INTEGER freq;
     static LARGE_INTEGER last_time;
     static BOOL first_frame = TRUE;
-    static float fps_average = 0.0f;
 
     if (first_frame) {
         QueryPerformanceFrequency(&freq);
@@ -96,10 +95,7 @@ static float calculate_fps_average()
 
     float delta_time = (float)(current_time.QuadPart - last_time.QuadPart) / (float)freq.QuadPart;
     last_time = current_time;
-
-    // Average FPS over several frames
-    fps_average = fps_average * 0.95f + (1.0f / delta_time) * 0.05f;
-    return fps_average;
+    return delta_time;
 }
 
 __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx)
@@ -109,9 +105,16 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
     // Process frame
     process_frame(ctx);
 
+    // Calculate animation delta time
+    ctx->animation_dt = calculate_animation_dt();
+
     // Calculate FPS average and draw it at right top corner
-    // Update display every few frames
-    float fps_average = calculate_fps_average();
+    static float fps_average = 0.0f;
+    if (ctx->animation_dt > 0.0f) // first frame, animation delta time is zero
+    {
+        fps_average = fps_average * 0.95f + (1.0f / ctx->animation_dt) * 0.05f;
+    }
+
     if (fps_average)
     {
         wchar_t fps_text[16];

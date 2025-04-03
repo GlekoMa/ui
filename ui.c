@@ -661,6 +661,9 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     int r_box_w = ctx->style->checkbox_size.x;
     int r_box_h = ctx->style->checkbox_size.y;
 
+    static float click_effect_timer = 0.10f;
+    float progress = 1.0f - click_effect_timer / 0.10f;
+
     // calculate text, box, thumb rect
     UI_Rect r_text = ui_rect(r.x, r.y, r.w - r_box_w - ctx->style->padding * 2, r.h);
     UI_Rect r_box = ui_rect(
@@ -672,7 +675,9 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     {
         int r_thumb_wh = r_box.h - 4;
         int r_thumb_x_s = r_box.x + 2;
-        r_thumb.x = r_thumb_x_s;
+        int r_thumb_x_e = r_box.x + (r_box.w - r_thumb_wh - 2);
+        r_thumb.x = (int)(r_thumb_x_s + (r_thumb_x_e - r_thumb_x_s) * progress);
+        r_thumb.x = ui_clamp(r_thumb.x, r_thumb_x_s, r_thumb_x_e);
         r_thumb.y = r_box.y + 2;
         r_thumb.w = r_thumb_wh;
         r_thumb.h = r_thumb_wh;
@@ -690,13 +695,19 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     ui_draw_widget_text(ctx, label, r_text, UI_COLOR_TEXT);
     if (!*state)
     {
+        if (click_effect_timer < 0.1f)
+        {
+            click_effect_timer += ctx->animation_dt;
+        }
         ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_BG]);
         ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_THUMB]);
     }
     else
     {
-        int r_thumb_x_e = r_box.x + (r_box.w - r_thumb.w - 2);
-        r_thumb.x = r_thumb_x_e;
+        if (click_effect_timer > 0.0f)
+        {
+            click_effect_timer -= ctx->animation_dt;
+        }
         ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_BG]);
         ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_THUMB]);
     }
