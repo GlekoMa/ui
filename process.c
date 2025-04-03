@@ -47,8 +47,11 @@ static void process_frame(UI_Context* ctx)
         {
             ui_layout_row(ctx, 1, 24);
             {
-                static int check = 0;
-                ui_checkbox(ctx, L"check", &check);
+                static int check[] = { 0, 1, 0, 1 };
+                ui_checkbox(ctx, L"check 1", &check[0]);
+                ui_checkbox(ctx, L"check 2", &check[1]);
+                ui_checkbox(ctx, L"check 3", &check[2]);
+                ui_checkbox(ctx, L"check 4", &check[3]);
             }
         }
         ui_end_window(ctx);

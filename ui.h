@@ -9,6 +9,7 @@
 #define UI_CONTAINERSTACK_SIZE 32
 #define UI_IDSTACK_SIZE 32
 #define UI_CLIPSTACK_SIZE 32
+#define UI_ANIMATION_DATA_SIZE 64
 #define UI_MAX_WIDTHS 16
 
 #define ui_min(a, b) ((a) < (b) ? (a) : (b))
@@ -120,6 +121,11 @@ typedef struct {
     UI_Color colors[UI_COLOR_MAX];
 } UI_Style;
 
+typedef struct {
+    UI_Id id;
+    float click_effect_timer;
+} AnimationData;
+
 typedef struct UI_Context UI_Context;
 struct UI_Context {
     void* renderer_data;
@@ -138,6 +144,8 @@ struct UI_Context {
     bool updated_rclicked;
     int frame;
     float animation_dt;
+    AnimationData anim_data[UI_ANIMATION_DATA_SIZE];
+    int anim_data_count;
     UI_Container* hover_root;
     UI_Container* next_hover_root;
     UI_Container* scroll_target;
