@@ -564,7 +564,7 @@ static void ui_draw_rect(UI_Context* ctx, UI_Rect rect, UI_Color color)
 
 static void ui_draw_text(UI_Context* ctx, const wchar_t* str, int len, UI_Vec2 pos, UI_Color color)
 {
-    UI_Rect rect = ui_rect(pos.x, pos.y, ctx->text_width(str, len), ctx->text_height());
+    UI_Rect rect = ui_rect(pos.x, pos.y, ctx->text_width(ctx->renderer_data, str, len), ctx->text_height(ctx->renderer_data));
     int clipped = ui_check_clip(ctx, rect);
     if (clipped == UI_CLIP_ALL) { return; }
     if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
@@ -626,7 +626,7 @@ static void ui_draw_widget_text(UI_Context* ctx, const wchar_t* str, UI_Rect rec
     {
         UI_Vec2 pos = {
             .x = rect.x + ctx->style->padding,
-            .y = rect.y + (rect.h - ctx->text_height()) / 2,
+            .y = rect.y + (rect.h - ctx->text_height(ctx->renderer_data)) / 2,
         };
         ui_draw_text(ctx, str, -1, pos, ctx->style->colors[colorid]);
     }
@@ -694,7 +694,6 @@ void ui_image(UI_Context* ctx, const char* path)
 
 void ui_init(UI_Context* ctx)
 {
-    memset(ctx, 0, sizeof(*ctx));
     ctx->draw_frame = draw_frame;
     ctx->style = &default_style;
 }

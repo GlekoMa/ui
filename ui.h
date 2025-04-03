@@ -118,9 +118,10 @@ typedef struct {
 
 typedef struct UI_Context UI_Context;
 struct UI_Context {
+    void* renderer_data;
     // callback
-    int (*text_width)(const wchar_t* str, int len);
-    int (*text_height)();
+    int (*text_width)(void* renderer_data, const wchar_t* str, int len);
+    int (*text_height)(void* renderer_data);
     void (*draw_frame)(UI_Context* ctx, UI_Rect rect, int colorid);
     // core state
     UI_Style* style;

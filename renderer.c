@@ -703,19 +703,18 @@ void r_draw_text(RendererState* r_state, const wchar_t* text, UI_Vec2 pos, UI_Co
     }
 }
 
-int r_get_text_width(const wchar_t* text, int len)
+int r_get_text_width(RendererState* r_state, const wchar_t* text, int len)
 {
-    // int res = 0;
-    // for (const wchar_t* p = text; *p && len--; p++)
-    // {
-    //     int chr = find_atlas_state_idx_by_codepoint(r_state, *p);
-    //     res += r_state->atlas[chr].xadvance;
-    // }
-    // return res;
-    return 100;
+    int res = 0;
+    for (const wchar_t* p = text; *p && len--; p++)
+    {
+        int chr = find_atlas_state_idx_by_codepoint(r_state, *p);
+        res += r_state->atlas[chr].xadvance;
+    }
+    return res;
 }
 
-int r_get_text_height()
+int r_get_text_height(RendererState* r_state)
 {
     return 24;
 }

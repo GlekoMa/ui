@@ -10,7 +10,7 @@
 
 ///
 
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 16384
 // atlas
 #define NUM_CHARS_SYMBOL 4
 #define NUM_CHARS_ASCII 95
@@ -88,8 +88,8 @@ void r_clear(RendererState* r_state, UI_Color color);
 void r_draw_rect(RendererState* r_state, UI_Rect rect, UI_Color color);
 void r_draw_icon(RendererState* r_state, int id, UI_Rect rect, UI_Color color);
 void r_draw_text(RendererState* r_state, const wchar_t* text, UI_Vec2 pos, UI_Color color);
-int r_get_text_width(const wchar_t* text, int len);
-int r_get_text_height();
+int r_get_text_width(RendererState* r_state, const wchar_t* text, int len);
+int r_get_text_height(RendererState* r_state);
 void r_set_clip_rect(RendererState* r_state, UI_Rect rect);
 void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path);
 void r_present(RendererState* r_state);

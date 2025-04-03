@@ -28,10 +28,7 @@ static POINT s_drag_start_pos;
 // hot reload helper
 //
 
-typedef int (*TextWidthFunc)(const wchar_t* text, int len);
-typedef int (*TextHeightFunc)();
-typedef void (*HotReloadedProcess)(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx,
-        TextWidthFunc width_func, TextHeightFunc height_func);
+typedef void (*HotReloadedProcess)(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx);
 
 typedef struct {
     HINSTANCE dll;
@@ -39,29 +36,29 @@ typedef struct {
     HotReloadedProcess func;
 } HotReloader;
 
-static FILETIME get_dll_write_time(const char* path) 
+static FILETIME get_dll_write_time(const char* path)
 {
     FILETIME time = { 0 };
     WIN32_FILE_ATTRIBUTE_DATA data;
-    if (GetFileAttributesExA(path, GetFileExInfoStandard, &data)) 
+    if (GetFileAttributesExA(path, GetFileExInfoStandard, &data))
     {
         time = data.ftLastWriteTime;
     }
     return time;
 }
 
-static bool check_and_reload(HotReloader* hr) 
+static bool check_and_reload(HotReloader* hr)
 {
     FILETIME current_time = get_dll_write_time("process.dll");
 
-    if (CompareFileTime(&current_time, &hr->last_write_time) == 0) 
+    if (CompareFileTime(&current_time, &hr->last_write_time) == 0)
     {
         return false;
     }
     else
     {
-        if (hr->dll) { 
-            FreeLibrary(hr->dll); 
+        if (hr->dll) {
+            FreeLibrary(hr->dll);
         }
         CopyFile("process.dll", "_process.dll", 0);
 
@@ -70,7 +67,6 @@ static bool check_and_reload(HotReloader* hr)
         expect(hr->dll);
         hr->func = (HotReloadedProcess)GetProcAddress(hr->dll, "hot_reloaded_process");
         expect(hr->func);
-        __debugbreak();
 
         // update last write time
         hr->last_write_time = current_time;
@@ -153,18 +149,20 @@ static LRESULT CALLBACK window_proc(HWND window, UINT message, WPARAM wparam, LP
 // context relate functions
 //
 
-int text_width(const wchar_t* text, int len)
+int text_width(void* renderer_data, const wchar_t* text, int len)
 {
+    RendererState* r_state = (RendererState*)renderer_data;
     if (len < 0)
     {
         len = (int)wcslen(text);
     }
-    return r_get_text_width(text, len);
+    return r_get_text_width(r_state, text, len);
 }
 
-int text_height()
+int text_height(void* renderer_data)
 {
-    return r_get_text_height();
+    RendererState* r_state = (RendererState*)renderer_data;
+    return r_get_text_height(r_state);
 }
 
 //
@@ -209,6 +207,9 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
     r_state.client_height = CLIENT_HEIGHT;
 
     g_ctx = malloc(sizeof(UI_Context));
+    g_ctx->renderer_data = &r_state;
+    g_ctx->text_width = text_width;
+    g_ctx->text_height = text_height;
     ui_init(g_ctx);
 
     // Show window
@@ -235,7 +236,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
         // Hot reload: process frame & render
         check_and_reload(&hr);
         expect(hr.func);
-        hr.func(img_factory, &r_state, g_ctx, text_width, text_height);
+        hr.func(img_factory, &r_state, g_ctx);
     }
 
     // Clean

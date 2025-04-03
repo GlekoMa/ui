@@ -77,12 +77,8 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
-__declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx,
-        TextWidthFunc width_func, TextHeightFunc height_func)
+__declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx)
 {
-    ctx->text_width = width_func;
-    ctx->text_height = height_func;
-
     // Process frame
     process_frame(ctx);
 
