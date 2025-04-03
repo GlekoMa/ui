@@ -23,7 +23,7 @@ if exist %BuildDir% (
 mkdir %BuildDir%
 
 :: --- Set compiler flags  ---
-set CommonCompilerFlags=/nologo /W3 /WX
+set CommonCompilerFlags=/nologo /W3 /WX /MP
 set CompilerDebugFlags=/Od /Zi /RTC1
 set CompilerReleaseFlags= /O2 /DNDEBUG
 if %IsRelease%==1 (
