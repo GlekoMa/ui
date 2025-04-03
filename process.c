@@ -31,7 +31,7 @@ static void process_frame(UI_Context* ctx)
                 ui_label(ctx, L"空山不见人");
                 ui_label(ctx, L"Do you know");
                 static int check = 0;
-                ui_checkbox(ctx, L"checkbox-dododo", &check);
+                ui_checkbox(ctx, L"check", &check);
             }
         }
         ui_end_window(ctx);
@@ -77,13 +77,52 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
+static float calculate_fps_average()
+{
+    static LARGE_INTEGER freq;
+    static LARGE_INTEGER last_time;
+    static BOOL first_frame = TRUE;
+    static float fps_average = 0.0f;
+
+    if (first_frame) {
+        QueryPerformanceFrequency(&freq);
+        QueryPerformanceCounter(&last_time);
+        first_frame = FALSE;
+        return 0.f;
+    }
+
+    LARGE_INTEGER current_time;
+    QueryPerformanceCounter(&current_time);
+
+    float delta_time = (float)(current_time.QuadPart - last_time.QuadPart) / (float)freq.QuadPart;
+    last_time = current_time;
+
+    // Average FPS over several frames
+    fps_average = fps_average * 0.95f + (1.0f / delta_time) * 0.05f;
+    return fps_average;
+}
+
 __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory, RendererState* r_state, UI_Context* ctx)
 {
+    r_clear(r_state, ui_color(255, 255, 255, 255));
+
     // Process frame
     process_frame(ctx);
 
+    // Calculate FPS average and draw it at right top corner
+    // Update display every few frames
+    float fps_average = calculate_fps_average();
+    if (fps_average)
+    {
+        wchar_t fps_text[16];
+        swprintf(fps_text, 16, L"FPS: %d", (int)(fps_average + 0.5f));
+        int fps_text_width = ctx->text_width(ctx->renderer_data, fps_text, 16 * sizeof(wchar_t));
+        r_draw_text(r_state, fps_text,
+                   ui_vec2(r_state->client_width - fps_text_width - 10, 10),
+                   ui_color(0, 0, 0, 255));
+    }
+
     // Render
-    r_clear(r_state, ui_color(255, 255, 255, 255));
     UI_Command* cmd = NULL;
     while (ui_next_command(ctx, &cmd))
     {
