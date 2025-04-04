@@ -826,6 +826,72 @@ void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Re
     flush(r_state, img->view);
 }
 
+static GIFFrame* r_load_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* path)
+{
+    // load gif data
+    unsigned idx = 0;
+    image_load_gif_metadata(img_factory, path, &r_state->gif_cache);
+    image_load_gif_frame(img_factory, path, idx, &r_state->gif_cache);
+
+    // create texture view
+    ID3D11ShaderResourceView* view;
+    {
+        D3D11_TEXTURE2D_DESC desc =
+        {
+            .Width = r_state->gif_cache.frames[idx].width,
+            .Height = r_state->gif_cache.frames[idx].height,
+            .MipLevels = 1,
+            .ArraySize = 1,
+            .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
+            .SampleDesc.Count = 1,
+            .Usage = D3D11_USAGE_IMMUTABLE,
+            .BindFlags = D3D11_BIND_SHADER_RESOURCE,
+        };
+        D3D11_SUBRESOURCE_DATA initial =
+        {
+            .pSysMem = r_state->gif_cache.frames[idx].bitmap,
+            .SysMemPitch = r_state->gif_cache.frames[idx].width * 4,
+        };
+        ID3D11Texture2D* texture;
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, &initial, &texture);
+        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, NULL, &view);
+        ID3D11Texture2D_Release(texture);
+    }
+    free(r_state->gif_cache.frames[idx].bitmap);
+    r_state->gif_cache.frames[idx].texture_view = (void*)view;
+    return &r_state->gif_cache.frames[idx];
+}
+
+void r_draw_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path)
+{
+    flush(r_state, NULL);
+    GIFFrame* frame = r_load_gif_first_frame(img_factory, r_state, path);
+
+    // calculate aspect ratio preserved dimensions
+    float frame_ratio = (float)frame->width / frame->height;
+    float rect_ratio = (float)rect.w / rect.h;
+
+    UI_Rect dst;
+    if (frame_ratio > rect_ratio)
+    {
+        dst.w = rect.w;
+        dst.h = (int)(rect.w / frame_ratio);
+    }
+    else
+    {
+        dst.h = rect.h;
+        dst.w = (int)(rect.h * frame_ratio);
+    }
+
+    // center in rect
+    dst.x = rect.x + (rect.w - dst.w) / 2;
+    dst.y = rect.y + (rect.h - dst.h) / 2;
+
+    // set image texture
+    push_rect(r_state, dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
+    flush(r_state, frame->texture_view);
+}
+
 void r_present(RendererState* r_state)
 {
     flush(r_state, NULL);

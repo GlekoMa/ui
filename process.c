@@ -12,7 +12,6 @@
 #include <windows.h>
 #include "ui.h"
 #include "renderer.h"
-#include "image.h"
 
 typedef int (*TextWidthFunc)(const wchar_t* text, int len);
 typedef int (*TextHeightFunc)();
@@ -59,7 +58,7 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
-static float calculate_animation_dt()
+static float calculate_delta_time()
 {
     static LARGE_INTEGER freq;
     static LARGE_INTEGER last_time;
@@ -88,7 +87,7 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
     process_frame(ctx);
 
     // Calculate animation delta time
-    ctx->animation_dt = calculate_animation_dt();
+    ctx->animation_dt = calculate_delta_time();
 
     // Calculate FPS average and draw it at right top corner
     static float fps_average = 0.0f;
@@ -119,6 +118,7 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
             case UI_COMMAND_IMAGE: r_draw_image(img_factory, r_state, cmd->image.rect, cmd->image.path); break;
         }
     }
+    r_draw_gif_first_frame(img_factory, r_state, ui_rect(0, 0, 300, 300), "assets/test.gif");
     r_present(r_state);
 }
 

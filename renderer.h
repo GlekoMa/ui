@@ -79,6 +79,7 @@ typedef struct {
     Atlas atlas[NUM_CHARS];
     ImageCache image_cache;
     PathResEntry image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
+    GIFCache gif_cache;
 } RendererState;
 
 HWND g_window;
@@ -92,5 +93,6 @@ int r_get_text_width(RendererState* r_state, const wchar_t* text, int len);
 int r_get_text_height(RendererState* r_state);
 void r_set_clip_rect(RendererState* r_state, UI_Rect rect);
 void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path);
+void r_draw_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path);
 void r_present(RendererState* r_state);
 void r_clean(RendererState* r_state);
