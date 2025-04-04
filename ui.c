@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include "ui.h"
 
+#define DEFAULT_CLICK_EFFECT_TIMER 0.15f
+
 #define push(stk, val)                                                                                       \
     do                                                                                                       \
     {                                                                                                        \
@@ -650,9 +652,37 @@ static void ui_draw_decorate_box(UI_Context* ctx, UI_Rect rect, UI_Color color, 
     int clipped = ui_check_clip(ctx, box_rect);
     if (clipped == UI_CLIP_ALL) { return; }
     if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
-    ui_draw_box(ctx, expand_rect(box_rect, bw), color, bw);
+    ui_draw_box(ctx, box_rect, color, bw);
     // reset clipping if it was set
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+}
+
+static int get_animation_index(UI_Context* ctx, int id, float* lclick_effect_timer, float* rclick_effect_timer)
+{
+    int anim_index = -1;
+    expect(ctx->anim_data_count < UI_ANIMATION_DATA_SIZE);
+    for (int i = 0; i < ctx->anim_data_count; i++)
+    {
+        if (ctx->anim_data[i].id == id)
+        {
+            *lclick_effect_timer = ctx->anim_data[i].lclick_effect_timer;
+            *rclick_effect_timer = ctx->anim_data[i].rclick_effect_timer;
+            anim_index = i;
+            break;
+        }
+    }
+    // if not found, create a new animation data
+    if (!*lclick_effect_timer)
+    {
+        anim_index = ctx->anim_data_count;
+        ctx->anim_data[ctx->anim_data_count].id = id;
+        ctx->anim_data[ctx->anim_data_count].lclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
+        ctx->anim_data[ctx->anim_data_count].rclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
+        *lclick_effect_timer = ctx->anim_data[anim_index].lclick_effect_timer;
+        *rclick_effect_timer = ctx->anim_data[anim_index].rclick_effect_timer;
+        ctx->anim_data_count++;
+    }
+    return anim_index;
 }
 
 void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
@@ -677,30 +707,13 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
         *state = !*state;
     }
 
-    // get click effect timer from animation data of context
-    float click_effect_timer = 0.0f;
-    int anim_index = 0;
-    {
-        expect(ctx->anim_data_count < UI_ANIMATION_DATA_SIZE);
-        for (int i = 0; i < ctx->anim_data_count; i++)
-        {
-            if (ctx->anim_data[i].id == id)
-            {
-                click_effect_timer = ctx->anim_data[i].click_effect_timer;
-                anim_index = i;
-                break;
-            }
-        }
-        // if not found, create a new animation data
-        if (!click_effect_timer)
-        {
-            anim_index = ctx->anim_data_count;
-            ctx->anim_data[ctx->anim_data_count].id = id;
-            ctx->anim_data[ctx->anim_data_count].click_effect_timer = 0.1f;
-            ctx->anim_data_count++;
-        }
-    }
-    float progress = 1.0f - click_effect_timer / 0.10f;
+    // get left click effect timer from animation data of context
+    float lclick_effect_timer = 0.0f;
+    float rclick_effect_timer = 0.0f;
+    int anim_index = get_animation_index(ctx, id, &lclick_effect_timer, &rclick_effect_timer);
+    float progress = 1.0f - lclick_effect_timer / DEFAULT_CLICK_EFFECT_TIMER;
+
+    unused(rclick_effect_timer);
 
     // calculate thumb rect
     UI_Rect r_thumb;
@@ -719,18 +732,18 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     ui_draw_widget_text(ctx, label, r_text, UI_COLOR_TEXT);
     if (!*state)
     {
-        if (click_effect_timer < 0.1f)
+        if (lclick_effect_timer < DEFAULT_CLICK_EFFECT_TIMER)
         {
-            ctx->anim_data[anim_index].click_effect_timer += ctx->animation_dt;
+            ctx->anim_data[anim_index].lclick_effect_timer += ctx->animation_dt;
         }
         ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_BG]);
         ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_INACTIVE_THUMB]);
     }
     else
     {
-        if (click_effect_timer > 0.0f)
+        if (lclick_effect_timer > 0.0f)
         {
-            ctx->anim_data[anim_index].click_effect_timer -= ctx->animation_dt;
+            ctx->anim_data[anim_index].lclick_effect_timer -= ctx->animation_dt;
         }
         ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_BG]);
         ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_THUMB]);
@@ -742,11 +755,43 @@ void ui_image(UI_Context* ctx, const char* path)
     UI_Rect rect = ui_layout_next(ctx);
     ui_draw_image(ctx, rect, path);
 
+    // update widget state (hover & clicked)
     UI_Id id = ui_get_id(ctx, path, (int)strlen(path));
     ui_update_widget(ctx, id, rect);
+
+    // handle animation
+    float lclick_effect_timer = 0.0f;
+    float rclick_effect_timer = 0.0f;
+    int anim_index = get_animation_index(ctx, id, &lclick_effect_timer, &rclick_effect_timer);
+
+    bool is_animating_lclick = lclick_effect_timer > 0.0f;
+    bool is_animating_rclick = rclick_effect_timer > 0.0f;
+    if (is_animating_lclick)
+    {
+        ctx->anim_data[anim_index].lclick_effect_timer -= ctx->animation_dt;
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_LCLICK], 4);
+    }
+    else if (is_animating_rclick)
+    {
+        ctx->anim_data[anim_index].rclick_effect_timer -= ctx->animation_dt;
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_RCLICK], 4);
+    }
+
+    // draw border based on state (hover & clicked)
     if (id == ctx->hover)
     {
-        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER], 1);
+        if (id == ctx->lclicked)
+        {
+            ctx->anim_data[anim_index].lclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
+            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_LCLICK], 4);
+        }
+        else if (id == ctx->rclicked)
+        {
+            ctx->anim_data[anim_index].rclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
+            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_RCLICK], 4);
+        }
+        else
+            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER], 1);
     }
 }
 

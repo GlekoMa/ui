@@ -16,6 +16,7 @@
 #define ui_max(a, b) ((a) > (b) ? (a) : (b))
 #define ui_clamp(x, a, b) ui_min(b, ui_max(a, x))
 #define ui_stack(T, n) struct { int idx; T items[n]; }
+#define unused(x) ((void) (x))
 #define expect(x)            \
     do                       \
     {                        \
@@ -123,7 +124,8 @@ typedef struct {
 
 typedef struct {
     UI_Id id;
-    float click_effect_timer;
+    float lclick_effect_timer;
+    float rclick_effect_timer;
 } AnimationData;
 
 typedef struct UI_Context UI_Context;
