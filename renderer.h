@@ -36,7 +36,7 @@ typedef struct {
 
 // store loaded images
 typedef struct {
-    ID3D11ShaderResourceView* view;
+    void* texture;
     int width;
     int height;
 } ImageResource;
@@ -61,7 +61,9 @@ typedef struct {
     ID3D11DeviceContext*      context;
     IDXGISwapChain1*          swapchain;
     ID3D11SamplerState*       sampler_state;
-    ID3D11ShaderResourceView* texture_view;
+    ID3D11ShaderResourceView* srview;
+    ID3D11ShaderResourceView* img_srview;
+    ID3D11ShaderResourceView* gif_srview;
     ID3D11Buffer*             vbuffer;
     ID3D11Buffer*             ibuffer;
     ID3D11Buffer*             cbuffer;
@@ -79,11 +81,12 @@ typedef struct {
     Atlas atlas[NUM_CHARS];
     ImageCache image_cache;
     PathResEntry image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
-    GIFCache gif_cache;
+    GIFFrameCache gif_frame_cache;
 } RendererState;
 
 HWND g_window;
 
+float calculate_delta_time();
 void r_init(RendererState* r_state);
 void r_clear(RendererState* r_state, UI_Color color);
 void r_draw_rect(RendererState* r_state, UI_Rect rect, UI_Color color);
@@ -93,6 +96,6 @@ int r_get_text_width(RendererState* r_state, const wchar_t* text, int len);
 int r_get_text_height(RendererState* r_state);
 void r_set_clip_rect(RendererState* r_state, UI_Rect rect);
 void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path);
-void r_draw_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path);
+void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path, float delta_time_ms);
 void r_present(RendererState* r_state);
 void r_clean(RendererState* r_state);

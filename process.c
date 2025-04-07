@@ -58,7 +58,7 @@ static void process_frame(UI_Context* ctx)
     ui_end(ctx);
 }
 
-static float calculate_delta_time()
+float calculate_delta_time()
 {
     static LARGE_INTEGER freq;
     static LARGE_INTEGER last_time;
@@ -118,7 +118,7 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
             case UI_COMMAND_IMAGE: r_draw_image(img_factory, r_state, cmd->image.rect, cmd->image.path); break;
         }
     }
-    r_draw_gif_first_frame(img_factory, r_state, ui_rect(0, 0, 300, 300), "assets/test.gif");
+    r_draw_image_gif(img_factory, r_state, ui_rect(50, 50, 200, 200), "C:\\Users\\niko1\\repos\\ui\\assets\\test2.gif", ctx->animation_dt);
     r_present(r_state);
 }
 

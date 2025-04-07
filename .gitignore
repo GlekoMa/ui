@@ -6,3 +6,5 @@ _process.dll
 d3d11_vshader.h
 d3d11_pshader.h
 atlas.png
+
+/assets_ext/

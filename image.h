@@ -5,25 +5,33 @@
 
 // store loaded gif
 typedef struct {
-    void* texture_view; // allow map to texture view (e.g. ID3D11ShaderResourceView)
+    void* texture; // as composed texture
     unsigned char* bitmap;
-    unsigned left;
-    unsigned top;
+    unsigned x;
+    unsigned y;
     unsigned width;
     unsigned height;
     unsigned delay;
 } GIFFrame;
 
-// note: type of member is used by realloc. if change, don't forget to update it in image_load_gif_metadata
 typedef struct {
+    float loop_current_time; // compare to delay and determine if display next frame
+    unsigned* accumulative_delays; // alloced by malloc
     unsigned frame_count;
-    GIFFrame* frames;
-    unsigned capacity;
-    unsigned count;
-} GIFCache;
+    unsigned frame_max_width;
+    unsigned frame_max_height;
+    GIFFrame* frames; // alloced by realloc
+    int capacity;
+    int count;
+} GIFFrameCache;
 
+// not gif
 void image_init(IWICImagingFactory** factory);
 void image_clean(IWICImagingFactory* factory);
 unsigned char* image_load(IWICImagingFactory* factory, const char* filename, unsigned* width, unsigned* height);
-void image_load_gif_metadata(IWICImagingFactory* factory, const char* filename, GIFCache* gif_cache);
-void image_load_gif_frame(IWICImagingFactory* factory, const char* filename, unsigned idx, GIFCache* gif_cache);
+
+// gif
+void image_gif_init(IWICImagingFactory* factory, const char* filename, GIFFrameCache* gif_frame_cache);
+void image_gif_clean(GIFFrameCache* gif_frame_cache);
+int get_current_frame_idx_based_accum_delays(GIFFrameCache* gif_frame_cache);
+void image_load_gif_frame(IWICImagingFactory* factory, const char* filename, unsigned idx, GIFFrameCache* gif_frame_cache);

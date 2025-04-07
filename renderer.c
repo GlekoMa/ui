@@ -15,6 +15,7 @@
 
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 
+static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* filename, unsigned frame_idx);
 //
 // Atlas save helper
 //
@@ -356,37 +357,55 @@ static void get_atlas(RendererState* r_state, unsigned char* temp_bitmap)
 // Renderer
 //
 
-static void flush(RendererState* r_state, ID3D11ShaderResourceView* texture_view)
+static void flush(RendererState* r_state, UI_Rect* viewport_rect, ID3D11ShaderResourceView* srview, 
+        ID3D11RenderTargetView* rtview, ID3D11Buffer* vbuffer, ID3D11Buffer* ibuffer, int index_count)
 {
-    // Map vertex & index buffer
-    map_vertex_index_buffer(r_state, r_state->context, r_state->vbuffer, r_state->ibuffer, r_state->client_width, r_state->client_height);
-
-    // Setup orthographic projection matrix into constant buffer
-    map_mvp_to_cbuffer(r_state->context, r_state->cbuffer, r_state->client_width, r_state->client_height);
+    ID3D11ShaderResourceView* use_srview = srview ? srview : r_state->srview;
+    ID3D11RenderTargetView* use_rtview = rtview ? rtview : r_state->rtview;
+    ID3D11Buffer* use_vbuffer = vbuffer ? vbuffer : r_state->vbuffer;
+    ID3D11Buffer* use_ibuffer = vbuffer ? ibuffer : r_state->ibuffer;
+    int use_index_count = index_count ? index_count : r_state->buf_idx * 6;
 
     // Set viewport
-    D3D11_VIEWPORT viewport = { 0, 0, (FLOAT)r_state->client_width, (FLOAT)r_state->client_height, 0, 1 };
+    D3D11_VIEWPORT viewport = { .MinDepth = 0, .MaxDepth = 1 };
+    if (viewport_rect)
+    {
+        viewport.TopLeftX = (FLOAT)viewport_rect->x;
+        viewport.TopLeftY = (FLOAT)viewport_rect->y;
+        viewport.Width = (FLOAT)viewport_rect->w;
+        viewport.Height = (FLOAT)viewport_rect->h;
+    }
+    else
+    {
+        viewport.TopLeftX = 0;
+        viewport.TopLeftY = 0;
+        viewport.Width = (FLOAT)r_state->client_width;
+        viewport.Height = (FLOAT)r_state->client_height;
+    }
+    // Setup orthographic projection matrix into constant buffer (use viewport setting)
+    map_mvp_to_cbuffer(r_state->context, r_state->cbuffer, (int)viewport.Width, (int)viewport.Height);
+
+    // Map vertex & index buffer
+    if (!vbuffer && !ibuffer)
+        map_vertex_index_buffer(r_state, r_state->context, r_state->vbuffer, r_state->ibuffer, r_state->client_width, r_state->client_height);
 
     // IA-VS-RS-PS-OM, Draw, Present!
     unsigned stride = sizeof(Vertex);
     unsigned offset = 0;
     ID3D11DeviceContext_IASetInputLayout(r_state->context, r_state->layout); // IA: Input Assembly
     ID3D11DeviceContext_IASetPrimitiveTopology(r_state->context, D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    ID3D11DeviceContext_IASetVertexBuffers(r_state->context, 0, 1, &r_state->vbuffer, &stride, &offset);
-    ID3D11DeviceContext_IASetIndexBuffer(r_state->context, r_state->ibuffer, DXGI_FORMAT_R32_UINT, 0);
+    ID3D11DeviceContext_IASetVertexBuffers(r_state->context, 0, 1, &use_vbuffer, &stride, &offset);
+    ID3D11DeviceContext_IASetIndexBuffer(r_state->context, use_ibuffer, DXGI_FORMAT_R32_UINT, 0);
     ID3D11DeviceContext_VSSetConstantBuffers(r_state->context, 0, 1, &r_state->cbuffer);
     ID3D11DeviceContext_VSSetShader(r_state->context, r_state->vshader, NULL, 0); // VS: Vertex Shader
     ID3D11DeviceContext_RSSetViewports(r_state->context, 1, &viewport); // RS: Rasterizer Stage
     ID3D11DeviceContext_RSSetState(r_state->context, r_state->raster_state);
     ID3D11DeviceContext_PSSetShader(r_state->context, r_state->pshader, NULL, 0); // PS: Pixel Shader
-    if (!texture_view)
-        ID3D11DeviceContext_PSSetShaderResources(r_state->context, 0, 1, &r_state->texture_view);
-    else
-        ID3D11DeviceContext_PSSetShaderResources(r_state->context, 0, 1, &texture_view);
+    ID3D11DeviceContext_PSSetShaderResources(r_state->context, 0, 1, &use_srview);
     ID3D11DeviceContext_PSSetSamplers(r_state->context, 0, 1, &r_state->sampler_state);
-    ID3D11DeviceContext_OMSetRenderTargets(r_state->context, 1, &r_state->rtview, NULL); // OM: Output Merger
+    ID3D11DeviceContext_OMSetRenderTargets(r_state->context, 1, &use_rtview, NULL); // OM: Output Merger
 	ID3D11DeviceContext_OMSetBlendState(r_state->context, r_state->blend_state, NULL, 0xffffffff);
-    ID3D11DeviceContext_DrawIndexed(r_state->context, r_state->buf_idx * 6, 0, 0);
+    ID3D11DeviceContext_DrawIndexed(r_state->context, use_index_count, 0, 0);
 
     // Reset buf_idx
     r_state->buf_idx = 0;
@@ -394,7 +413,7 @@ static void flush(RendererState* r_state, ID3D11ShaderResourceView* texture_view
 
 static void push_rect(RendererState* r_state, UI_Rect dst, UI_Rect src, UI_Color color, int tex_index)
 {
-    if (r_state->buf_idx == BUFFER_SIZE) { flush(r_state, NULL); }
+    if (r_state->buf_idx == BUFFER_SIZE) { flush(r_state, NULL, NULL, NULL, NULL, NULL, 0); }
 
     int vert_idx  = r_state->buf_idx * 4;
     int index_idx = r_state->buf_idx * 6;
@@ -522,7 +541,7 @@ void r_init(RendererState* r_state)
         };
         ID3D11Texture2D* texture;
         ID3D11Device_CreateTexture2D(r_state->device, &desc, &texture_subresource_data, &texture);
-        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, 0, &r_state->texture_view);
+        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, 0, &r_state->srview);
         ID3D11Texture2D_Release(texture);
         free(temp_bitmap);
     }
@@ -573,7 +592,7 @@ void r_init(RendererState* r_state)
                 .DestBlend = D3D11_BLEND_INV_SRC_ALPHA,
                 .BlendOp = D3D11_BLEND_OP_ADD,
                 .SrcBlendAlpha = D3D11_BLEND_ONE,
-                .DestBlendAlpha = D3D11_BLEND_ZERO,
+                .DestBlendAlpha = D3D11_BLEND_INV_SRC_ALPHA,
                 .BlendOpAlpha = D3D11_BLEND_OP_ADD,
                 .RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL
             }
@@ -723,7 +742,7 @@ void r_set_clip_rect(RendererState* r_state, UI_Rect rect)
 {
     // TODO: Because of this flush, the memory usage will grow to huge (e.g 15MB => 35~80MB).
     //       The key reason is `map_vertex_index_buffer`.
-    flush(r_state, NULL);
+    flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
     D3D11_RECT scissor_rect = {
         .left = rect.x,
         .top = rect.y,
@@ -737,11 +756,12 @@ static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererStat
 {
     // load image data
     unsigned width, height;
-    unsigned char* data = image_load(img_factory, path, &width, &height);
+    unsigned char* data;
+    data = image_load(img_factory, path, &width, &height);
     expect(data);
 
     // create texture view
-    ID3D11ShaderResourceView* view;
+    ID3D11Texture2D* texture;
     {
         D3D11_TEXTURE2D_DESC desc =
         {
@@ -759,10 +779,7 @@ static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererStat
             .pSysMem = data,
             .SysMemPitch = width * 4,
         };
-        ID3D11Texture2D* texture;
         ID3D11Device_CreateTexture2D(r_state->device, &desc, &initial, &texture);
-        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, NULL, &view);
-        ID3D11Texture2D_Release(texture);
     }
     free(data);
 
@@ -777,7 +794,7 @@ static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererStat
     expect(n < 128);
     r_state->image_cache.resources[n] = (ImageResource)
     {
-        .view = view,
+        .texture = (void*)texture,
         .width = width,
         .height = height
     };
@@ -789,7 +806,7 @@ static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererStat
 
 void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path)
 {
-    flush(r_state, NULL);
+    flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
     ImageResource* img = 0;
     for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
     {
@@ -821,93 +838,189 @@ void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Re
     dst.x = rect.x + (rect.w - dst.w) / 2;
     dst.y = rect.y + (rect.h - dst.h) / 2;
 
-    // set image texture
+    // set image texture index and create srview
+    ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)img->texture, NULL, &r_state->img_srview);
     push_rect(r_state, dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
-    flush(r_state, img->view);
+    flush(r_state, NULL, r_state->img_srview, NULL, NULL, NULL, 0);
+    ID3D11ShaderResourceView_Release(r_state->img_srview);
 }
 
-static GIFFrame* r_load_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* path)
+static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* filename, unsigned frame_idx)
 {
-    // load gif data
-    unsigned idx = 0;
-    image_load_gif_metadata(img_factory, path, &r_state->gif_cache);
-    image_load_gif_frame(img_factory, path, idx, &r_state->gif_cache);
-
-    // create texture view
-    ID3D11ShaderResourceView* view;
+    // create composed texture & rtview
     {
-        D3D11_TEXTURE2D_DESC desc =
-        {
-            .Width = r_state->gif_cache.frames[idx].width,
-            .Height = r_state->gif_cache.frames[idx].height,
+        D3D11_TEXTURE2D_DESC desc = {
+                .Width     = r_state->gif_frame_cache.frame_max_width,
+                .Height    = r_state->gif_frame_cache.frame_max_height,
+                .MipLevels = 1,
+                .ArraySize = 1,
+                .Format    = DXGI_FORMAT_R8G8B8A8_UNORM,
+                .SampleDesc.Count = 1,
+                .Usage     = D3D11_USAGE_DEFAULT,
+                .BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
+        };
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, NULL, (ID3D11Texture2D**)&r_state->gif_frame_cache.frames[frame_idx].texture);
+    }
+    ID3D11RenderTargetView* composed_rtview;
+    ID3D11Device_CreateRenderTargetView(r_state->device, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx].texture, NULL, &composed_rtview);
+
+    // create temporary srview with frame data
+    ID3D11Texture2D* frame_texture;
+    {
+        D3D11_TEXTURE2D_DESC desc = {
+            .Width = r_state->gif_frame_cache.frames[frame_idx].width,
+            .Height = r_state->gif_frame_cache.frames[frame_idx].height,
             .MipLevels = 1,
             .ArraySize = 1,
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
             .SampleDesc.Count = 1,
-            .Usage = D3D11_USAGE_IMMUTABLE,
+            .Usage = D3D11_USAGE_DEFAULT,
             .BindFlags = D3D11_BIND_SHADER_RESOURCE,
         };
-        D3D11_SUBRESOURCE_DATA initial =
-        {
-            .pSysMem = r_state->gif_cache.frames[idx].bitmap,
-            .SysMemPitch = r_state->gif_cache.frames[idx].width * 4,
+        image_load_gif_frame(img_factory, filename, frame_idx, &r_state->gif_frame_cache);
+        D3D11_SUBRESOURCE_DATA data = {
+            .pSysMem = r_state->gif_frame_cache.frames[frame_idx].bitmap,
+            .SysMemPitch = r_state->gif_frame_cache.frames[frame_idx].width * 4,
         };
-        ID3D11Texture2D* texture;
-        ID3D11Device_CreateTexture2D(r_state->device, &desc, &initial, &texture);
-        ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)texture, NULL, &view);
-        ID3D11Texture2D_Release(texture);
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, &data, &frame_texture);
+        // free(r_state->gif_frame_cache.frames[frame_idx].bitmap);
     }
-    free(r_state->gif_cache.frames[idx].bitmap);
-    r_state->gif_cache.frames[idx].texture_view = (void*)view;
-    return &r_state->gif_cache.frames[idx];
+    ID3D11ShaderResourceView* frame_srview;
+    ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)frame_texture, NULL, &frame_srview);
+
+    // create vbuffer, ibuffer and viewport to draw
+    ID3D11Buffer* frame_vbuffer;
+    {
+        UI_Rect rect =
+        {
+            .x = r_state->gif_frame_cache.frames[frame_idx].x,
+            .y = r_state->gif_frame_cache.frames[frame_idx].y,
+            .w = r_state->gif_frame_cache.frames[frame_idx].width,
+            .h = r_state->gif_frame_cache.frames[frame_idx].height
+        };
+        Vertex data[4] =
+        {
+            { {(float)rect.x,            (float)rect.y},            { 0, 0 }, { 255, 255, 255, 255 }, 1 },
+            { {(float)(rect.x + rect.w), (float)rect.y},            { 1, 0 }, { 255, 255, 255, 255 }, 1 },
+            { {(float)rect.x,            (float)(rect.y + rect.h)}, { 0, 1 }, { 255, 255, 255, 255 }, 1 },
+            { {(float)(rect.x + rect.w), (float)(rect.y + rect.h)}, { 1, 1 }, { 255, 255, 255, 255 }, 1 }
+        };
+        D3D11_BUFFER_DESC desc =
+        {
+            .ByteWidth = sizeof(data),
+            .Usage     = D3D11_USAGE_IMMUTABLE,
+            .BindFlags = D3D11_BIND_VERTEX_BUFFER,
+        };
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = data };
+        ID3D11Device_CreateBuffer(r_state->device, &desc, &initial, &frame_vbuffer);
+    }
+    ID3D11Buffer* frame_ibuffer;
+    {
+        unsigned data[6] = { 0, 1, 2, 2, 1, 3 };
+        D3D11_BUFFER_DESC desc = {
+            .ByteWidth      = sizeof(data),
+            .Usage          = D3D11_USAGE_DYNAMIC,
+            .BindFlags      = D3D11_BIND_INDEX_BUFFER,
+            .CPUAccessFlags = D3D11_CPU_ACCESS_WRITE,
+        };
+        D3D11_SUBRESOURCE_DATA initial = { .pSysMem = data };
+        ID3D11Device_CreateBuffer(r_state->device, &desc, &initial, &frame_ibuffer);
+    }
+    UI_Rect viewport_rect = { 0, 0, r_state->gif_frame_cache.frame_max_width, r_state->gif_frame_cache.frame_max_height };
+
+    // if not the first frame, compose previous texture and current frame; then draw
+    if (frame_idx > 0)
+    {
+        ID3D11DeviceContext_CopyResource(r_state->context, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx].texture, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx - 1].texture);
+    }
+    flush(r_state, &viewport_rect, frame_srview, composed_rtview, frame_vbuffer, frame_ibuffer, 6);
+
+    // composed texture has two characters: as render target (output) and as shader resource (input)
+    // DirectX doesn't allow it to be both, so we need to release it (as a render target) before using it as a shader resource
+    ID3D11RenderTargetView* null_rtview = NULL;
+    ID3D11DeviceContext_OMSetRenderTargets(r_state->context, 1, &null_rtview, NULL);
+
+    // clean
+    ID3D11Texture2D_Release(frame_texture);
+    ID3D11Buffer_Release(frame_vbuffer);
+    ID3D11Buffer_Release(frame_ibuffer);
+    ID3D11ShaderResourceView_Release(frame_srview);
+    ID3D11RenderTargetView_Release(composed_rtview);
 }
 
-void r_draw_gif_first_frame(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path)
+void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path, float delta_time_ms)
 {
-    flush(r_state, NULL);
-    GIFFrame* frame = r_load_gif_first_frame(img_factory, r_state, path);
+    flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
+
+    // if not init, init.
+    if (!r_state->gif_frame_cache.capacity)
+    {
+        image_gif_init(img_factory, path, &r_state->gif_frame_cache);
+    }
+
+    float delta_time = delta_time_ms * 1000;
+    r_state->gif_frame_cache.loop_current_time += delta_time;
+    int idx = get_current_frame_idx_based_accum_delays(&r_state->gif_frame_cache);
+
+    // check if current frame is last, if so reset idx and time to 0
+    if (idx == r_state->gif_frame_cache.frame_count)
+    {
+        r_state->gif_frame_cache.loop_current_time = 0;
+        idx = 0;
+    }
+    // only load frame if it's not already loaded
+    if (!r_state->gif_frame_cache.frames[idx].texture)
+    {
+        r_load_image_gif_frame(img_factory, r_state, path, idx);
+    }
 
     // calculate aspect ratio preserved dimensions
-    float frame_ratio = (float)frame->width / frame->height;
-    float rect_ratio = (float)rect.w / rect.h;
-
     UI_Rect dst;
-    if (frame_ratio > rect_ratio)
     {
-        dst.w = rect.w;
-        dst.h = (int)(rect.w / frame_ratio);
-    }
-    else
-    {
-        dst.h = rect.h;
-        dst.w = (int)(rect.h * frame_ratio);
+        float img_ratio = (float)r_state->gif_frame_cache.frame_max_width / r_state->gif_frame_cache.frame_max_height;
+        float rect_ratio = (float)rect.w / rect.h;
+
+        if (img_ratio > rect_ratio)
+        {
+            dst.w = rect.w;
+            dst.h = (int)(rect.w / img_ratio);
+        }
+        else
+        {
+            dst.h = rect.h;
+            dst.w = (int)(rect.h * img_ratio);
+        }
+        // center in rect
+        dst.x = rect.x + (rect.w - dst.w) / 2;
+        dst.y = rect.y + (rect.h - dst.h) / 2;
     }
 
-    // center in rect
-    dst.x = rect.x + (rect.w - dst.w) / 2;
-    dst.y = rect.y + (rect.h - dst.h) / 2;
-
-    // set image texture
+    // draw
+    ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)r_state->gif_frame_cache.frames[idx].texture, NULL, &r_state->gif_srview);
     push_rect(r_state, dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
-    flush(r_state, frame->texture_view);
+    flush(r_state, NULL, r_state->gif_srview, NULL, NULL, NULL, 0);
+    ID3D11ShaderResourceView_Release(r_state->gif_srview);
 }
 
 void r_present(RendererState* r_state)
 {
-    flush(r_state, NULL);
+    flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
     IDXGISwapChain1_Present(r_state->swapchain, 1, 0);
 }
 
 void r_clean(RendererState* r_state)
 {
+
     for (int i = 0; i < r_state->image_cache.count; i++)
-    {
-        ID3D11ShaderResourceView_Release(r_state->image_cache.resources[i].view);
-    }
+        if (r_state->image_cache.resources[i].texture)
+            ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->image_cache.resources[i].texture);
+    for (int i = 0; i < r_state->gif_frame_cache.count; i++)
+        if (r_state->gif_frame_cache.frames[i].texture)
+            ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_frame_cache.frames[i].texture);
     ID3D11RenderTargetView_Release(r_state->rtview);
     ID3D11RasterizerState_Release(r_state->raster_state);
     ID3D11SamplerState_Release(r_state->sampler_state);
-    ID3D11ShaderResourceView_Release(r_state->texture_view);
+    ID3D11ShaderResourceView_Release(r_state->srview);
     ID3D11Buffer_Release(r_state->vbuffer);
     ID3D11Buffer_Release(r_state->ibuffer);
     ID3D11Buffer_Release(r_state->cbuffer);

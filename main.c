@@ -242,6 +242,7 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdLin
     // Clean
     FreeLibrary(hr.dll);
     r_clean(&r_state);
+    image_gif_clean(&r_state.gif_frame_cache);
     image_clean(img_factory);
     return 0;
 }
