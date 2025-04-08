@@ -54,6 +54,12 @@ typedef struct {
 } PathResEntry;
 
 typedef struct {
+    GIFFrameCache* gif_frame_cache;
+    int capacity;
+    int count;
+} GIFCache;
+
+typedef struct {
     int client_width;
     int client_height;
     // D3D11 specification
@@ -81,7 +87,7 @@ typedef struct {
     Atlas atlas[NUM_CHARS];
     ImageCache image_cache;
     PathResEntry image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
-    GIFFrameCache gif_frame_cache;
+    GIFCache gif_cache;
 } RendererState;
 
 HWND g_window;

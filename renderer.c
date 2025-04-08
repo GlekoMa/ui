@@ -13,6 +13,8 @@
 #include "ui.h"
 #include "renderer.h"
 
+int gif_idx = 0;
+
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 
 static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* filename, unsigned frame_idx);
@@ -845,13 +847,13 @@ void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Re
     ID3D11ShaderResourceView_Release(r_state->img_srview);
 }
 
-static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* filename, unsigned frame_idx)
+static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* path, unsigned frame_idx)
 {
     // create composed texture & rtview
     {
         D3D11_TEXTURE2D_DESC desc = {
-                .Width     = r_state->gif_frame_cache.frame_max_width,
-                .Height    = r_state->gif_frame_cache.frame_max_height,
+                .Width     = r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_width,
+                .Height    = r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_height,
                 .MipLevels = 1,
                 .ArraySize = 1,
                 .Format    = DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -859,17 +861,17 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
                 .Usage     = D3D11_USAGE_DEFAULT,
                 .BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE,
         };
-        ID3D11Device_CreateTexture2D(r_state->device, &desc, NULL, (ID3D11Texture2D**)&r_state->gif_frame_cache.frames[frame_idx].texture);
+        ID3D11Device_CreateTexture2D(r_state->device, &desc, NULL, (ID3D11Texture2D**)&r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].texture);
     }
     ID3D11RenderTargetView* composed_rtview;
-    ID3D11Device_CreateRenderTargetView(r_state->device, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx].texture, NULL, &composed_rtview);
+    ID3D11Device_CreateRenderTargetView(r_state->device, (ID3D11Resource*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].texture, NULL, &composed_rtview);
 
     // create temporary srview with frame data
     ID3D11Texture2D* frame_texture;
     {
         D3D11_TEXTURE2D_DESC desc = {
-            .Width = r_state->gif_frame_cache.frames[frame_idx].width,
-            .Height = r_state->gif_frame_cache.frames[frame_idx].height,
+            .Width = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].width,
+            .Height = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].height,
             .MipLevels = 1,
             .ArraySize = 1,
             .Format = DXGI_FORMAT_R8G8B8A8_UNORM,
@@ -877,10 +879,10 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
             .Usage = D3D11_USAGE_DEFAULT,
             .BindFlags = D3D11_BIND_SHADER_RESOURCE,
         };
-        image_load_gif_frame(img_factory, filename, frame_idx, &r_state->gif_frame_cache);
+        image_load_gif_frame(img_factory, path, frame_idx, &r_state->gif_cache.gif_frame_cache[gif_idx]);
         D3D11_SUBRESOURCE_DATA data = {
-            .pSysMem = r_state->gif_frame_cache.frames[frame_idx].bitmap,
-            .SysMemPitch = r_state->gif_frame_cache.frames[frame_idx].width * 4,
+            .pSysMem = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].bitmap,
+            .SysMemPitch = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].width * 4,
         };
         ID3D11Device_CreateTexture2D(r_state->device, &desc, &data, &frame_texture);
         // free(r_state->gif_frame_cache.frames[frame_idx].bitmap);
@@ -893,10 +895,10 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
     {
         UI_Rect rect =
         {
-            .x = r_state->gif_frame_cache.frames[frame_idx].x,
-            .y = r_state->gif_frame_cache.frames[frame_idx].y,
-            .w = r_state->gif_frame_cache.frames[frame_idx].width,
-            .h = r_state->gif_frame_cache.frames[frame_idx].height
+            .x = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].x,
+            .y = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].y,
+            .w = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].width,
+            .h = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].height
         };
         Vertex data[4] =
         {
@@ -926,12 +928,12 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
         D3D11_SUBRESOURCE_DATA initial = { .pSysMem = data };
         ID3D11Device_CreateBuffer(r_state->device, &desc, &initial, &frame_ibuffer);
     }
-    UI_Rect viewport_rect = { 0, 0, r_state->gif_frame_cache.frame_max_width, r_state->gif_frame_cache.frame_max_height };
+    UI_Rect viewport_rect = { 0, 0, r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_width, r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_height };
 
     // if not the first frame, compose previous texture and current frame; then draw
     if (frame_idx > 0)
     {
-        ID3D11DeviceContext_CopyResource(r_state->context, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx].texture, (ID3D11Resource*)r_state->gif_frame_cache.frames[frame_idx - 1].texture);
+        ID3D11DeviceContext_CopyResource(r_state->context, (ID3D11Resource*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].texture, (ID3D11Resource*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx - 1].texture);
     }
     flush(r_state, &viewport_rect, frame_srview, composed_rtview, frame_vbuffer, frame_ibuffer, 6);
 
@@ -948,28 +950,40 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
     ID3D11RenderTargetView_Release(composed_rtview);
 }
 
+// NOTE: current the rendering of test.gif is incorrect.
+//       (maybe is related to disposal method, see MSDN sample WicAnimatedGif.cpp)
 void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path, float delta_time_ms)
 {
     flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
 
-    // if not init, init.
-    if (!r_state->gif_frame_cache.capacity)
+    // check & increase gif cache capacity
+    if (r_state->gif_cache.count >= r_state->gif_cache.capacity)
     {
-        image_gif_init(img_factory, path, &r_state->gif_frame_cache);
+        r_state->gif_cache.capacity = r_state->gif_cache.capacity ? r_state->gif_cache.capacity * 2 : 16;
+        r_state->gif_cache.gif_frame_cache = realloc(r_state->gif_cache.gif_frame_cache, r_state->gif_cache.capacity * sizeof(GIFFrameCache));
+        memset(r_state->gif_cache.gif_frame_cache, 0, sizeof(r_state->gif_cache.gif_frame_cache[0]) * r_state->gif_cache.capacity);
     }
 
+    // load (init) current gif metadata if not have loaded (inited) yet
+    if (!r_state->gif_cache.gif_frame_cache[gif_idx].capacity)
+    {
+        image_gif_init(img_factory, path, &r_state->gif_cache.gif_frame_cache[gif_idx]);
+    }
+
+    // update frame loop current time & accumulative delays
     float delta_time = delta_time_ms * 1000;
-    r_state->gif_frame_cache.loop_current_time += delta_time;
-    int idx = get_current_frame_idx_based_accum_delays(&r_state->gif_frame_cache);
+    r_state->gif_cache.gif_frame_cache[gif_idx].loop_current_time += delta_time;
+    int idx = get_current_frame_idx_based_accum_delays(&r_state->gif_cache.gif_frame_cache[gif_idx]);
 
     // check if current frame is last, if so reset idx and time to 0
-    if (idx == r_state->gif_frame_cache.frame_count)
+    if (idx == r_state->gif_cache.gif_frame_cache[gif_idx].frame_count)
     {
-        r_state->gif_frame_cache.loop_current_time = 0;
+        r_state->gif_cache.gif_frame_cache[gif_idx].loop_current_time = 0;
         idx = 0;
     }
+
     // only load frame if it's not already loaded
-    if (!r_state->gif_frame_cache.frames[idx].texture)
+    if (!r_state->gif_cache.gif_frame_cache[gif_idx].frames[idx].texture)
     {
         r_load_image_gif_frame(img_factory, r_state, path, idx);
     }
@@ -977,7 +991,7 @@ void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, U
     // calculate aspect ratio preserved dimensions
     UI_Rect dst;
     {
-        float img_ratio = (float)r_state->gif_frame_cache.frame_max_width / r_state->gif_frame_cache.frame_max_height;
+        float img_ratio = (float)r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_width / r_state->gif_cache.gif_frame_cache[gif_idx].frame_max_height;
         float rect_ratio = (float)rect.w / rect.h;
 
         if (img_ratio > rect_ratio)
@@ -996,7 +1010,7 @@ void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, U
     }
 
     // draw
-    ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)r_state->gif_frame_cache.frames[idx].texture, NULL, &r_state->gif_srview);
+    ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[idx].texture, NULL, &r_state->gif_srview);
     push_rect(r_state, dst, ui_rect(0,0,1,1), ui_color(255,255,255,255), 1);
     flush(r_state, NULL, r_state->gif_srview, NULL, NULL, NULL, 0);
     ID3D11ShaderResourceView_Release(r_state->gif_srview);
@@ -1014,9 +1028,9 @@ void r_clean(RendererState* r_state)
     for (int i = 0; i < r_state->image_cache.count; i++)
         if (r_state->image_cache.resources[i].texture)
             ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->image_cache.resources[i].texture);
-    for (int i = 0; i < r_state->gif_frame_cache.count; i++)
-        if (r_state->gif_frame_cache.frames[i].texture)
-            ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_frame_cache.frames[i].texture);
+    for (int i = 0; i < r_state->gif_cache.gif_frame_cache[gif_idx].count; i++)
+        if (r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture)
+            ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture);
     ID3D11RenderTargetView_Release(r_state->rtview);
     ID3D11RasterizerState_Release(r_state->raster_state);
     ID3D11SamplerState_Release(r_state->sampler_state);
