@@ -1045,9 +1045,10 @@ void r_clean(RendererState* r_state)
     for (int i = 0; i < r_state->image_cache.count; i++)
         if (r_state->image_cache.resources[i].texture)
             ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->image_cache.resources[i].texture);
-    // for (int i = 0; i < r_state->gif_cache.gif_frame_cache[gif_idx].count; i++)
-    //     if (r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture)
-    //         ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture);
+    for (int i = 0; i < r_state->gif_cache.count; i++)
+        for (int j = 0; j < r_state->gif_cache.gif_frame_cache[i].count; j++)
+            if (r_state->gif_cache.gif_frame_cache[i].frames[j].texture)
+                ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_cache.gif_frame_cache[i].frames[j].texture);
     ID3D11RenderTargetView_Release(r_state->rtview);
     ID3D11RasterizerState_Release(r_state->raster_state);
     ID3D11SamplerState_Release(r_state->sampler_state);

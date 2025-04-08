@@ -33,6 +33,8 @@ static void process_frame(UI_Context* ctx)
             {
                 ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test.png");
                 ui_image(ctx, "C:/Users/niko1/repos/ui/assets/test2.png");
+                ui_gif(ctx, "C:/Users/niko1/repos/ui/assets/test.gif");
+                ui_gif(ctx, "C:/Users/niko1/repos/ui/assets/test2.gif");
             }
             ui_layout_row(ctx, 1, 24);
             {
@@ -116,10 +118,9 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
             case UI_COMMAND_TEXT: r_draw_text(r_state, cmd->text.str, cmd->text.pos, cmd->text.color); break;
             case UI_COMMAND_CLIP: r_set_clip_rect(r_state, cmd->clip.rect); break;
             case UI_COMMAND_IMAGE: r_draw_image(img_factory, r_state, cmd->image.rect, cmd->image.path); break;
+            case UI_COMMAND_GIF: r_draw_image_gif(img_factory, r_state, cmd->gif.rect, cmd->gif.path, cmd->gif.anim_dt); break;
         }
     }
-    r_draw_image_gif(img_factory, r_state, ui_rect(50, 100, 50, 50), "C:\\Users\\niko1\\repos\\ui\\assets\\test.gif", ctx->animation_dt);
-    r_draw_image_gif(img_factory, r_state, ui_rect(50, 50, 50, 50), "C:\\Users\\niko1\\repos\\ui\\assets\\test2.gif", ctx->animation_dt);
     r_present(r_state);
 }
 

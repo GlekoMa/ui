@@ -63,6 +63,7 @@ enum {
     UI_COMMAND_RECT,
     UI_COMMAND_TEXT,
     UI_COMMAND_IMAGE,
+    UI_COMMAND_GIF,
     UI_COMMAND_MAX
 };
 
@@ -81,6 +82,7 @@ typedef struct { UI_BaseCommand base; UI_Rect rect; } UI_ClipCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; UI_Color color; } UI_RectCommand;
 typedef struct { UI_BaseCommand base; UI_Vec2 pos; UI_Color color; wchar_t str[1]; } UI_TextCommand;
 typedef struct { UI_BaseCommand base; UI_Rect rect; const char* path; } UI_ImageCommand;
+typedef struct { UI_BaseCommand base; UI_Rect rect; const char* path; float anim_dt; } UI_GIFCommand;
 
 typedef union {
     int type;
@@ -90,6 +92,7 @@ typedef union {
     UI_RectCommand rect;
     UI_TextCommand text;
     UI_ImageCommand image;
+    UI_GIFCommand gif;
 } UI_Command;
 
 typedef struct {
@@ -189,6 +192,7 @@ void ui_layout_row(UI_Context* ctx, int items, int height);
 void ui_label(UI_Context* ctx, const wchar_t* text);
 void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state);
 void ui_image(UI_Context* ctx, const char* path);
+void ui_gif(UI_Context* ctx, const char* path);
 
 void ui_init(UI_Context* ctx);
 void ui_begin(UI_Context* ctx);

@@ -604,6 +604,25 @@ static void ui_draw_image(UI_Context* ctx, UI_Rect rect, const char* path)
     if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
+static void ui_draw_gif(UI_Context* ctx, UI_Rect rect, const char* path)
+{
+    // check if image needs to be clipped
+    int clipped = ui_check_clip(ctx, rect);
+    if (clipped == UI_CLIP_ALL) { return; }
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, ui_get_clip_rect(ctx)); }
+    // add command
+    UI_Command* cmd;
+    if (rect.w > 0 && rect.h > 0)
+    {
+        cmd = ui_push_command(ctx, UI_COMMAND_GIF, sizeof(UI_GIFCommand));
+        cmd->gif.rect = rect;
+        cmd->gif.path = path;
+        cmd->gif.anim_dt = ctx->animation_dt;
+    }
+    // reset clipping if it was set
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+}
+
 static void ui_draw_box(UI_Context* ctx, UI_Rect rect, UI_Color color, int bw)
 {
     ui_draw_rect(ctx, ui_rect(rect.x + bw, rect.y, rect.w - 2 * bw, bw), color);
@@ -781,15 +800,48 @@ void ui_image(UI_Context* ctx, const char* path)
     if (id == ctx->hover)
     {
         if (id == ctx->lclicked)
-        {
             ctx->anim_data[anim_index].lclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
-            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_LCLICK], 4);
-        }
         else if (id == ctx->rclicked)
-        {
             ctx->anim_data[anim_index].rclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
-            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_RCLICK], 4);
-        }
+        else
+            ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER], 1);
+    }
+}
+
+void ui_gif(UI_Context* ctx, const char* path)
+{
+    UI_Rect rect = ui_layout_next(ctx);
+    ui_draw_gif(ctx, rect, path);
+
+    // update widget state (hover & clicked)
+    UI_Id id = ui_get_id(ctx, path, (int)strlen(path));
+    ui_update_widget(ctx, id, rect);
+
+    // handle animation
+    float lclick_effect_timer = 0.0f;
+    float rclick_effect_timer = 0.0f;
+    int anim_index = get_animation_index(ctx, id, &lclick_effect_timer, &rclick_effect_timer);
+
+    bool is_animating_lclick = lclick_effect_timer > 0.0f;
+    bool is_animating_rclick = rclick_effect_timer > 0.0f;
+    if (is_animating_lclick)
+    {
+        ctx->anim_data[anim_index].lclick_effect_timer -= ctx->animation_dt;
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_LCLICK], 4);
+    }
+    else if (is_animating_rclick)
+    {
+        ctx->anim_data[anim_index].rclick_effect_timer -= ctx->animation_dt;
+        ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER_RCLICK], 4);
+    }
+
+    // draw border based on state (hover & clicked)
+    if (id == ctx->hover)
+    {
+        if (id == ctx->lclicked)
+            ctx->anim_data[anim_index].lclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
+        else if (id == ctx->rclicked)
+            ctx->anim_data[anim_index].rclick_effect_timer = DEFAULT_CLICK_EFFECT_TIMER;
         else
             ui_draw_decorate_box(ctx, rect, ctx->style->colors[UI_COLOR_BORDER], 1);
     }
