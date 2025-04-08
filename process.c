@@ -118,7 +118,8 @@ __declspec(dllexport) void hot_reloaded_process(IWICImagingFactory* img_factory,
             case UI_COMMAND_IMAGE: r_draw_image(img_factory, r_state, cmd->image.rect, cmd->image.path); break;
         }
     }
-    r_draw_image_gif(img_factory, r_state, ui_rect(50, 50, 200, 200), "C:\\Users\\niko1\\repos\\ui\\assets\\test2.gif", ctx->animation_dt);
+    r_draw_image_gif(img_factory, r_state, ui_rect(50, 100, 50, 50), "C:\\Users\\niko1\\repos\\ui\\assets\\test.gif", ctx->animation_dt);
+    r_draw_image_gif(img_factory, r_state, ui_rect(50, 50, 50, 50), "C:\\Users\\niko1\\repos\\ui\\assets\\test2.gif", ctx->animation_dt);
     r_present(r_state);
 }
 

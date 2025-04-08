@@ -13,11 +13,8 @@
 #include "ui.h"
 #include "renderer.h"
 
-int gif_idx = 0;
-
 enum { ATLAS_WIDTH = 1200, ATLAS_HEIGHT = 1200 };
 
-static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* filename, unsigned frame_idx);
 //
 // Atlas save helper
 //
@@ -809,6 +806,8 @@ static ImageResource* r_load_image(IWICImagingFactory* img_factory, RendererStat
 void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Rect rect, const char* path)
 {
     flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
+    
+    // load img resource
     ImageResource* img = 0;
     for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
     {
@@ -847,7 +846,7 @@ void r_draw_image(IWICImagingFactory* img_factory, RendererState* r_state, UI_Re
     ID3D11ShaderResourceView_Release(r_state->img_srview);
 }
 
-static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, const char* path, unsigned frame_idx)
+static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererState* r_state, int gif_idx, const char* path, int frame_idx)
 {
     // create composed texture & rtview
     {
@@ -885,7 +884,7 @@ static void r_load_image_gif_frame(IWICImagingFactory* img_factory, RendererStat
             .SysMemPitch = r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].width * 4,
         };
         ID3D11Device_CreateTexture2D(r_state->device, &desc, &data, &frame_texture);
-        // free(r_state->gif_frame_cache.frames[frame_idx].bitmap);
+        free(r_state->gif_cache.gif_frame_cache[gif_idx].frames[frame_idx].bitmap);
     }
     ID3D11ShaderResourceView* frame_srview;
     ID3D11Device_CreateShaderResourceView(r_state->device, (ID3D11Resource*)frame_texture, NULL, &frame_srview);
@@ -956,6 +955,24 @@ void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, U
 {
     flush(r_state, NULL, NULL, NULL, NULL, NULL, 0);
 
+    // load gif frame cache
+    int gif_idx = -1;
+    for (int i = 0; i < MAX_IMAGE_PATH_RES_ENTRIES; i++)
+    {
+        if (r_state->gif_path_res_entries[i].path == path)
+        {
+            gif_idx = r_state->gif_path_res_entries[i].gif_idx;
+        }
+    }
+    if (gif_idx == -1)
+    {
+        r_state->gif_path_res_entries[r_state->gif_cache.count].path = path;
+        r_state->gif_path_res_entries[r_state->gif_cache.count].gif_idx = (
+            gif_idx = r_state->gif_cache.count
+        );
+        r_state->gif_cache.count++;
+    }
+
     // check & increase gif cache capacity
     if (r_state->gif_cache.count >= r_state->gif_cache.capacity)
     {
@@ -985,7 +1002,7 @@ void r_draw_image_gif(IWICImagingFactory* img_factory, RendererState* r_state, U
     // only load frame if it's not already loaded
     if (!r_state->gif_cache.gif_frame_cache[gif_idx].frames[idx].texture)
     {
-        r_load_image_gif_frame(img_factory, r_state, path, idx);
+        r_load_image_gif_frame(img_factory, r_state, gif_idx, path, idx);
     }
 
     // calculate aspect ratio preserved dimensions
@@ -1028,9 +1045,9 @@ void r_clean(RendererState* r_state)
     for (int i = 0; i < r_state->image_cache.count; i++)
         if (r_state->image_cache.resources[i].texture)
             ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->image_cache.resources[i].texture);
-    for (int i = 0; i < r_state->gif_cache.gif_frame_cache[gif_idx].count; i++)
-        if (r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture)
-            ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture);
+    // for (int i = 0; i < r_state->gif_cache.gif_frame_cache[gif_idx].count; i++)
+    //     if (r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture)
+    //         ID3D11Texture2D_Release((ID3D11Texture2D*)r_state->gif_cache.gif_frame_cache[gif_idx].frames[i].texture);
     ID3D11RenderTargetView_Release(r_state->rtview);
     ID3D11RasterizerState_Release(r_state->raster_state);
     ID3D11SamplerState_Release(r_state->sampler_state);

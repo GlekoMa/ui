@@ -47,17 +47,21 @@ typedef struct {
     int count;
 } ImageCache;
 
-// map image path to image resource
 typedef struct {
     const char* path;
     ImageResource* resource;
-} PathResEntry;
+} ImagePathResEntry;
 
 typedef struct {
     GIFFrameCache* gif_frame_cache;
     int capacity;
     int count;
 } GIFCache;
+
+typedef struct {
+    const char* path;
+    int gif_idx;
+} GIFPathResEntry;
 
 typedef struct {
     int client_width;
@@ -86,8 +90,9 @@ typedef struct {
     int buf_idx;
     Atlas atlas[NUM_CHARS];
     ImageCache image_cache;
-    PathResEntry image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
+    ImagePathResEntry image_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
     GIFCache gif_cache;
+    GIFPathResEntry gif_path_res_entries[MAX_IMAGE_PATH_RES_ENTRIES];
 } RendererState;
 
 HWND g_window;
