@@ -712,7 +712,6 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     int clipped = ui_check_clip(ctx, r);
     if (clipped == UI_CLIP_ALL) { return; }
     UI_Rect cr = ui_get_clip_rect(ctx);
-    ui_draw_box(ctx, cr, ui_color(0, 0, 255, 255), 1);
     if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); } // TODO
 
     int r_box_w = ctx->style->checkbox_size.x;
