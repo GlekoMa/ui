@@ -22,7 +22,7 @@
 
 static UI_Style default_style = {
     // padding | spacing | title_height | checkbox_size
-    5, 4, 26, { 32, 16 },
+    5, 15, 26, { 32, 16 },
     // scrollbar_size | thumb_size
     12, 8,
     {
@@ -707,6 +707,14 @@ static int get_animation_index(UI_Context* ctx, int id, float* lclick_effect_tim
 void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
 {
     UI_Rect r = ui_layout_next(ctx);
+
+    // check if needs to be clipped
+    int clipped = ui_check_clip(ctx, r);
+    if (clipped == UI_CLIP_ALL) { return; }
+    UI_Rect cr = ui_get_clip_rect(ctx);
+    ui_draw_box(ctx, cr, ui_color(0, 0, 255, 255), 1);
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); } // TODO
+
     int r_box_w = ctx->style->checkbox_size.x;
     int r_box_h = ctx->style->checkbox_size.y;
 
@@ -767,6 +775,9 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
         ui_draw_rect(ctx, r_box, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_BG]);
         ui_draw_rect(ctx, r_thumb, ctx->style->colors[UI_COLOR_CHECKBOX_ACTIVE_THUMB]);
     }
+
+    // reset clipping if it was set
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
 }
 
 void ui_image(UI_Context* ctx, const char* path)
