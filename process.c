@@ -13,9 +13,6 @@
 #include "ui.h"
 #include "renderer.h"
 
-typedef int (*TextWidthFunc)(const wchar_t* text, int len);
-typedef int (*TextHeightFunc)();
-
 static void process_frame(UI_Context* ctx)
 {
     ui_begin(ctx);
