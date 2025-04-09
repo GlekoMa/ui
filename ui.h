@@ -190,7 +190,7 @@ void ui_end_window(UI_Context* ctx);
 
 void ui_layout_row(UI_Context* ctx, int items, int height);
 void ui_label(UI_Context* ctx, const wchar_t* text);
-void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state);
+bool ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state);
 void ui_image(UI_Context* ctx, const char* path);
 void ui_gif(UI_Context* ctx, const char* path);
 

@@ -704,15 +704,15 @@ static int get_animation_index(UI_Context* ctx, int id, float* lclick_effect_tim
     return anim_index;
 }
 
-void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
+bool ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
 {
     UI_Rect r = ui_layout_next(ctx);
 
-    // check if needs to be clipped
-    int clipped = ui_check_clip(ctx, r);
-    if (clipped == UI_CLIP_ALL) { return; }
-    UI_Rect cr = ui_get_clip_rect(ctx);
-    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); } // TODO
+    // // check if needs to be clipped
+    // int clipped = ui_check_clip(ctx, r);
+    // if (clipped == UI_CLIP_ALL) { return; }
+    // UI_Rect cr = ui_get_clip_rect(ctx);
+    // if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); } // TODO
 
     int r_box_w = ctx->style->checkbox_size.x;
     int r_box_h = ctx->style->checkbox_size.y;
@@ -776,7 +776,8 @@ void ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     }
 
     // reset clipping if it was set
-    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+    // if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+    return (bool)*state;
 }
 
 void ui_image(UI_Context* ctx, const char* path)
