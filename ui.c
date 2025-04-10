@@ -708,12 +708,6 @@ bool ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
 {
     UI_Rect r = ui_layout_next(ctx);
 
-    // // check if needs to be clipped
-    // int clipped = ui_check_clip(ctx, r);
-    // if (clipped == UI_CLIP_ALL) { return; }
-    // UI_Rect cr = ui_get_clip_rect(ctx);
-    // if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); } // TODO
-
     int r_box_w = ctx->style->checkbox_size.x;
     int r_box_h = ctx->style->checkbox_size.y;
 
@@ -756,6 +750,14 @@ bool ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
 
     // draw text & checkbox
     ui_draw_widget_text(ctx, label, r_text, UI_COLOR_TEXT);
+
+
+    // check if needs to be clipped
+    int clipped = ui_check_clip(ctx, r);
+    if (clipped == UI_CLIP_ALL) { return *state; }
+    UI_Rect cr = ui_get_clip_rect(ctx);
+    if (clipped == UI_CLIP_PART) { ui_set_clip(ctx, cr); }
+
     if (!*state)
     {
         if (lclick_effect_timer < DEFAULT_CLICK_EFFECT_TIMER)
@@ -776,7 +778,7 @@ bool ui_checkbox(UI_Context* ctx, const wchar_t* label, int* state)
     }
 
     // reset clipping if it was set
-    // if (clipped) { ui_set_clip(ctx, unclipped_rect); }
+    if (clipped) { ui_set_clip(ctx, unclipped_rect); }
     return (bool)*state;
 }
 
