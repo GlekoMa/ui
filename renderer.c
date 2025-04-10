@@ -418,15 +418,16 @@ static void push_rect(RendererState* r_state, UI_Rect dst, UI_Rect src, UI_Color
     int index_idx = r_state->buf_idx * 6;
     r_state->buf_idx++;
 
-    // Update vbuffer (pos)
-    r_state->vert_data[vert_idx + 0].pos[0] = (float)dst.x;
-    r_state->vert_data[vert_idx + 0].pos[1] = (float)dst.y;
-    r_state->vert_data[vert_idx + 1].pos[0] = (float)dst.x + dst.w;
-    r_state->vert_data[vert_idx + 1].pos[1] = (float)dst.y;
-    r_state->vert_data[vert_idx + 2].pos[0] = (float)dst.x;
-    r_state->vert_data[vert_idx + 2].pos[1] = (float)dst.y + dst.h;
-    r_state->vert_data[vert_idx + 3].pos[0] = (float)dst.x + dst.w;
-    r_state->vert_data[vert_idx + 3].pos[1] = (float)dst.y + dst.h;
+    // Update vertex buffer (pos)
+    // (adding +0.5 to fix the integer to float conversion precision loss)
+    r_state->vert_data[vert_idx + 0].pos[0] = (float)dst.x + 0.5f;
+    r_state->vert_data[vert_idx + 0].pos[1] = (float)dst.y + 0.5f;
+    r_state->vert_data[vert_idx + 1].pos[0] = (float)dst.x + 0.5f + dst.w;
+    r_state->vert_data[vert_idx + 1].pos[1] = (float)dst.y + 0.5f;
+    r_state->vert_data[vert_idx + 2].pos[0] = (float)dst.x + 0.5f;
+    r_state->vert_data[vert_idx + 2].pos[1] = (float)dst.y + 0.5f + dst.h;
+    r_state->vert_data[vert_idx + 3].pos[0] = (float)dst.x + 0.5f + dst.w;
+    r_state->vert_data[vert_idx + 3].pos[1] = (float)dst.y + 0.5f + dst.h;
 
     // Update vbuffer (uv)
     if (tex_index == 0)

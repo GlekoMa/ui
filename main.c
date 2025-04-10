@@ -16,8 +16,8 @@
 #include "renderer.h"
 #include "image.h"
 
-#define CLIENT_WIDTH 800
-#define CLIENT_HEIGHT 600
+#define CLIENT_WIDTH 1200
+#define CLIENT_HEIGHT 800
 
 UI_Context* g_ctx;
 RendererState r_state = { 0 };
